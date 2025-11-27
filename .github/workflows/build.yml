@@ -24,6 +24,5 @@ jobs:
       - uses: vexxhost/docker-atmosphere/.github/actions/build-image@main
         with:
           image-name: keystone
-          base-image-tag: zed
           build-contexts: keystone=openstack/keystone
           push: ${{ github.event_name != 'pull_request' }}
