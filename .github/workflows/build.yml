@@ -16,13 +16,14 @@ jobs:
       id-token: write
       packages: write
     steps:
-      - uses: vexxhost/docker-atmosphere/.github/actions/checkout@main
+      - uses: vexxhost/docker-atmosphere/.github/actions/checkout@stable/zed
         with:
           repository: openstack/keystone
-          ref: a568938e0c967a56ade269c93f42718008487b14
+          ref: 2b77d93b167a93c3899c6abb912d7a6bb65f1f16
 
-      - uses: vexxhost/docker-atmosphere/.github/actions/build-image@main
+      - uses: vexxhost/docker-atmosphere/.github/actions/build-image@stable/zed
         with:
           image-name: keystone
+          base-image-tag: zed
           build-contexts: keystone=openstack/keystone
           push: ${{ github.event_name != 'pull_request' }}
