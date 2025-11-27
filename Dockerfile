@@ -6,7 +6,7 @@ RUN --mount=type=bind,from=keystone,source=/,target=/src/keystone,readwrite <<EO
 uv pip install \
     --constraint /upper-constraints.txt \
         /src/keystone[ldap] \
-        keystone-keycloak-backend==0.2.0
+        keystone-keycloak-backend==0.1.8
 EOF
 
 FROM ghcr.io/vexxhost/python-base:zed@sha256:5a4fb2e6c2b06a38efc20a850a29250c224a29d86711f0b4c66dbfbd40eb3212
@@ -22,7 +22,7 @@ apt-get install -qq -y --no-install-recommends \
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 EOF
-ARG MOD_AUTH_OPENIDC_VERSION=2.4.18.1
+ARG MOD_AUTH_OPENIDC_VERSION=2.4.12.1
 ARG TARGETARCH
 RUN <<EOF bash -xe
 # TODO(mnaser): mod_auth_openidc does not have aarch64 builds
