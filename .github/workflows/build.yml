@@ -16,12 +16,12 @@ jobs:
       id-token: write
       packages: write
     steps:
-      - uses: vexxhost/docker-atmosphere/.github/actions/checkout@main
+      - uses: vexxhost/docker-atmosphere/.github/actions/checkout@2023.1
         with:
           repository: openstack/keystone
-          ref: a568938e0c967a56ade269c93f42718008487b14
+          ref: e4b40af0ae3698fbbbbfb8c22468b33aae80e6d7
 
-      - uses: vexxhost/docker-atmosphere/.github/actions/build-image@main
+      - uses: vexxhost/docker-atmosphere/.github/actions/build-image@2023.1
         with:
           image-name: keystone
           build-contexts: keystone=openstack/keystone
