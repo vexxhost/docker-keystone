@@ -1,0 +1,125 @@
+From c63efe1df102bcd6d39361bef45baf4ecdb7f1bd Mon Sep 17 00:00:00 2001
+From: Artem Goncharov <artem.goncharov@gmail.com>
+Date: Mon, 10 Nov 2025 16:01:18 +0100
+Subject: [PATCH] Invalidate token of user disabled in readonly backend
+
+We support custom identity plugins. They (and also LDAP backend) may be
+considered as a read-only (not supporting user data modification through
+Keystone API). When a user of such backend is disabled in the remote
+system Keystone will never learn about that and as such tokens for those
+users will remain active. They cannot be renewed, but still they stay
+valid.
+In order to address this situation we need to do additional steps in the
+token validation and identify the current state of the user in the
+backend. Due to the use of the token caching it is not possible to reuse
+normal token validation functionality (it will never gets invalidated as
+such). In order to keep performance impact as low as possible modify the
+token validation as following:
+- regular checks
+- revocation check
+- if token is still active and revoke check passed fetch current user
+  data. When user is disabled - log a warning (explaining the situation)
+  and raise `UserDisabled` exception.
+
+Since Keystone also does not receive a message when user is reactivated
+(i.e. it was accidentally disabled) we cannot use the same approach as
+for regular user disabling and generate a token revocation event. This
+would cause the user to be locked out until the revocation event
+expires.
+
+Closes-bug: #2122615
+Change-Id: If5b83feabc670ced54ef12fe7826267af7e3419d
+Signed-off-by: Artem Goncharov <artem.goncharov@gmail.com>
+---
+
+diff --git a/keystone/tests/unit/test_v3_auth.py b/keystone/tests/unit/test_v3_auth.py
+index b95a21e..e6762b2 100644
+--- a/keystone/tests/unit/test_v3_auth.py
++++ b/keystone/tests/unit/test_v3_auth.py
+@@ -873,18 +873,29 @@
+         # Make sure the token is valid
+         r = self._validate_token(unscoped_token)
+         self.assertValidUnscopedTokenResponse(r)
++        user_id = self.user["id"]
++        domain_id, driver, entity_id = (
++            PROVIDERS.identity_api._get_domain_driver_and_entity_id(user_id)
++        )
++        user = PROVIDERS.identity_api.get_user(user_id)
++        user["enabled"] = False
+         # Disable the user
+-        self._set_user_enabled(self.user, enabled=False)
++        PROVIDERS.identity_api._update_user_with_federated_objects(
++            user, driver, entity_id
++        )
++        PROVIDERS.identity_api.get_user.invalidate(self, user_id)
+         # Ensure validating a token for a disabled user fails
+         self._validate_token(
+             unscoped_token, expected_status=http.client.NOT_FOUND
+         )
+-        # Enable the user
+-        self._set_user_enabled(self.user)
+-        # Ensure validating a token for a re-enabled user fails
+-        self._validate_token(
+-            unscoped_token, expected_status=http.client.NOT_FOUND
++        ## Re-enable the user
++        user["enabled"] = True
++        PROVIDERS.identity_api._update_user_with_federated_objects(
++            user, driver, entity_id
+         )
++        PROVIDERS.identity_api.get_user.invalidate(self, user_id)
++        ## Ensure validating a token for a re-enabled user passes
++        self._validate_token(unscoped_token, expected_status=http.client.OK)
+
+     def test_unscoped_token_is_invalid_after_disabling_user_domain(self):
+         unscoped_token = self._get_unscoped_token()
+diff --git a/keystone/token/provider.py b/keystone/token/provider.py
+index 46b7571..ed4186c 100644
+--- a/keystone/token/provider.py
++++ b/keystone/token/provider.py
+@@ -214,7 +214,32 @@
+             raise exception.TokenNotFound(_('Failed to validate token'))
+
+         if current_time < expiry:
++            # Check for the normal revocation
+             self.check_revocation(token)
++
++            # Token is not revoked, but maybe it should've been.
++            if token.user_id:
++                # NOTE: in readonly backend drivers (the ones where the user
++                # can be deactivated remotely without involving Keystone)
++                # there is no token revocation event for the user deactivation.
++                # As such it is necessary to implement an additional check.
++                # Due to the caching of the `_validate_token` function it is
++                # not enough to have the validation in the token model itself.
++                # On the other side we cannot really use the same revocation
++                # strategy, since when the user gets re-enabled (i.e. it was
++                # accidentially disabled) it would not be able to login for a
++                # token TTL time (since we do not know when exactly the user
++                # was disabled/enabled (revocation to expire).
++                # See bug https://bugs.launchpad.net/keystone/+bug/2122615
++                user = PROVIDERS.identity_api.get_user(token.user_id)
++
++                if user and not user.get('enabled'):
++                    LOG.warn(
++                        'Unable to validate token because user '
++                        f' {token.user_id} is disabled'
++                    )
++                    raise exception.UserDisabled(user_id=token.user_id)
++
+             # Token has not expired and has not been revoked.
+             return None
+         else:
+diff --git a/releasenotes/notes/invalidate-token-disabled-user-readonly-backend-5fa09c3e40e8d795.yaml b/releasenotes/notes/invalidate-token-disabled-user-readonly-backend-5fa09c3e40e8d795.yaml
+new file mode 100644
+index 0000000..f3b5153
+--- /dev/null
++++ b/releasenotes/notes/invalidate-token-disabled-user-readonly-backend-5fa09c3e40e8d795.yaml
+@@ -0,0 +1,8 @@
++---
++security:
++  - |
++    A potential security related issue is fixed where a token of the user from a
++    read-only backend (i.e. LDAP) continues being accepted after the user is
++    disabled in the backend. This is caused by the fact that Keystone does not
++    receive any notification for that and is not able to revoke such tokens.
++    See https://bugs.launchpad.net/keystone/+bug/2122615 for details.
