@@ -26,4 +26,7 @@ jobs:
         with:
           image-name: keystone
           build-contexts: keystone=openstack/keystone
+          build-args: |
+            FROM_PYTHON_BASE=ghcr.io/vexxhost/python-base-debian:main@sha256:9358ff0930c11c306e7f56c092e768abda8f40fcfe1cbc1111e2ca0819c1e70f
+            FROM_OPENSTACK_VENV_BUILDER=ghcr.io/vexxhost/openstack-venv-builder-debian:main@sha256:34ad8b5b42529e08adcde1bfe9278b44df614b0135bfdae3b500557e994c336e
           push: ${{ github.event_name != 'pull_request' }}
