@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © 2025 VEXXHOST, Inc.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-FROM ghcr.io/vexxhost/openstack-venv-builder:main@sha256:eb654cc13ea9ff00675950806be39bd2fcc688e0c5d7ac633399f451bc97c256 AS build
+FROM ghcr.io/vexxhost/openstack-venv-builder-debian:main@sha256:34ad8b5b42529e08adcde1bfe9278b44df614b0135bfdae3b500557e994c336e AS build
 RUN --mount=type=bind,from=keystone,source=/,target=/src/keystone,readwrite <<EOF bash -xe
 uv pip install \
     --constraint /upper-constraints.txt \
@@ -9,35 +9,18 @@ uv pip install \
         keystone-keycloak-backend==0.4.0
 EOF
 
-FROM ghcr.io/vexxhost/python-base:main@sha256:45d6ed59d5813651c67229eb5c4b3f39d2769226f204bda57e15dcce3be6d7cd
+FROM ghcr.io/vexxhost/python-base-debian:main@sha256:9358ff0930c11c306e7f56c092e768abda8f40fcfe1cbc1111e2ca0819c1e70f
 RUN \
-    groupadd -g 42424 keystone && \
-    useradd -u 42424 -g 42424 -M -d /var/lib/keystone -s /usr/sbin/nologin -c "Keystone User" keystone && \
-    mkdir -p /etc/keystone /var/log/keystone /var/lib/keystone /var/cache/keystone && \
-    chown -Rv keystone:keystone /etc/keystone /var/log/keystone /var/lib/keystone /var/cache/keystone
+  groupadd -g 42424 keystone && \
+  useradd -u 42424 -g 42424 -M -d /var/lib/keystone -s /usr/sbin/nologin -c "Keystone User" keystone && \
+  mkdir -p /etc/keystone /var/log/keystone /var/lib/keystone /var/cache/keystone && \
+  chown -Rv keystone:keystone /etc/keystone /var/log/keystone /var/lib/keystone /var/cache/keystone
 RUN <<EOF bash -xe
 apt-get update -qq
 apt-get install -qq -y --no-install-recommends \
-    apache2 libapache2-mod-wsgi-py3
+    apache2 libapache2-mod-wsgi-py3 libapache2-mod-auth-openidc
 apt-get clean
 rm -rf /var/lib/apt/lists/*
-EOF
-ARG MOD_AUTH_OPENIDC_VERSION=2.4.18.1
-ARG TARGETARCH
-RUN <<EOF bash -xe
-# TODO(mnaser): mod_auth_openidc does not have aarch64 builds
-if [ "${TARGETARCH}" = "arm64" ]; then
-    exit 0
-fi
-
-apt-get update -qq
-apt-get install -qq -y --no-install-recommends \
-    curl
-curl -LO https://github.com/OpenIDC/mod_auth_openidc/releases/download/v${MOD_AUTH_OPENIDC_VERSION}/libapache2-mod-auth-openidc_${MOD_AUTH_OPENIDC_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
-apt-get install -y --no-install-recommends ./libapache2-mod-auth-openidc_${MOD_AUTH_OPENIDC_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
 a2enmod auth_openidc
-apt-get purge -y --auto-remove curl
-apt-get clean
-rm -rfv /var/lib/apt/lists/* libapache2-mod-auth-openidc_${MOD_AUTH_OPENIDC_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
 EOF
 COPY --from=build --link /var/lib/openstack /var/lib/openstack
