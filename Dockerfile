@@ -6,7 +6,7 @@ RUN --mount=type=bind,from=keystone,source=/,target=/src/keystone,readwrite <<EO
 uv pip install \
     --constraint /upper-constraints.txt \
         /src/keystone[ldap] \
-        keystone-keycloak-backend==0.4.0
+        keystone-keycloak-backend==0.5.0
 EOF
 
 FROM ghcr.io/vexxhost/python-base:zed@sha256:0090545d296b9e800270722e22b4e8c7d320e5b5c46c30ebaa698b76583576dc
