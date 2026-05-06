@@ -20,7 +20,7 @@ jobs:
       - uses: vexxhost/docker-atmosphere/.github/actions/checkout@a1ad25c00b6bbf44621748b3a9ed664c6b6cf929 # main
         with:
           repository: openstack/keystone
-          ref: 24b0e1190b04701614659a74d5a5b644902a77b8 # stable/2025.2
+          ref: ad8b17c7f2039ce03877fe6bd0465d5852ca578f # stable/2025.2
 
       - uses: vexxhost/docker-atmosphere/.github/actions/build-image@a1ad25c00b6bbf44621748b3a9ed664c6b6cf929 # main
         with:
