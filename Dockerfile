@@ -9,7 +9,7 @@ uv pip install \
         keystone-keycloak-backend==0.5.0
 EOF
 
-FROM ghcr.io/vexxhost/python-base:2024.2@sha256:38333693b971db4ebbbad9fea749f978e31d8afc896a1292fe55d8eaf8a4588f
+FROM ghcr.io/vexxhost/python-base:2024.2@sha256:9d93864b55f7f4887f2a4f82f150e1d1e7e2caec56d4bb749941fd6500528313
 RUN \
     groupadd -g 42424 keystone && \
     useradd -u 42424 -g 42424 -M -d /var/lib/keystone -s /usr/sbin/nologin -c "Keystone User" keystone && \
