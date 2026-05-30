@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © 2025 VEXXHOST, Inc.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-FROM ghcr.io/vexxhost/openstack-venv-builder:2023.2@sha256:729ef1f8fde19f001870962a4c9f7092c6f128acfa0938686968f3b1c9a7d2bf AS build
+FROM ghcr.io/vexxhost/openstack-venv-builder:2023.2@sha256:3404a82d82355df07a0763c005891ba5fc3051314fe39b50df84390755ecd7d9 AS build
 RUN --mount=type=bind,from=keystone,source=/,target=/src/keystone,readwrite <<EOF bash -xe
 uv pip install \
     --constraint /upper-constraints.txt \
