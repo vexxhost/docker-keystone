@@ -1,0 +1,78 @@
+From 99972352457f51c4b2f51a25e3df6b391f1b1563 Mon Sep 17 00:00:00 2001
+From: Boris Bobrov <b.bobrov@sap.com>
+Date: Tue, 7 Apr 2026 23:33:18 +0200
+Subject: [PATCH] Add tests for restricted app cred guard
+
+Verify that the _check_unrestricted_application_credential guard on
+the OS-EC2 credential create endpoint blocks restricted application
+credentials from creating EC2 credentials, while still allowing
+unrestricted application credentials to do so.
+
+Generated-By: claude-opus-4-6 (OpenCode)
+Related-Bug: #2142138
+Change-Id: I733305ba61bd8362f0c9675e257b1d42a6ef4053
+Signed-off-by: Boris Bobrov <b.bobrov@sap.com>
+(cherry picked from commit c87ce6ed435f01431343d6b2bb6697a640514d27)
+(cherry picked from commit 52e47439688f320befb49514570cc5ac707931f5)
+---
+ keystone/tests/unit/test_v3_credential.py | 47 +++++++++++++++++++++++
+ 1 file changed, 47 insertions(+)
+
+diff --git a/keystone/tests/unit/test_v3_credential.py b/keystone/tests/unit/test_v3_credential.py
+index b0d0e7fcc..59841beb6 100644
+--- a/keystone/tests/unit/test_v3_credential.py
++++ b/keystone/tests/unit/test_v3_credential.py
+@@ -994,3 +994,50 @@ class TestCredentialEc2(CredentialBaseTestCase):
+         self.assertRaises(exception.CredentialNotFound,
+                           PROVIDERS.credential_api.get_credential,
+                           cred_from_credential_api[0]['id'])
++
++    def _get_app_cred_token(self, unrestricted=False):
++        """Create an application credential and return a token for it."""
++        ref = unit.new_application_credential_ref(roles=[{'id': self.role_id}])
++        del ref['id']
++        if unrestricted:
++            ref['unrestricted'] = True
++        r = self.post(
++            f'/users/{self.user_id}/application_credentials',
++            body={'application_credential': ref},
++        )
++        app_cred = r.result['application_credential']
++        auth_data = self.build_authentication_request(
++            app_cred_id=app_cred['id'], secret=app_cred['secret']
++        )
++        r = self.v3_create_token(auth_data)
++        return r.headers.get('X-Subject-Token')
++
++    def test_ec2_create_credential_with_restricted_app_cred(self):
++        """Test that a restricted app cred cannot create EC2 credentials.
++
++        A restricted application credential must not be allowed to create
++        EC2 credentials, as this would bypass the role restriction and
++        grant full user access to S3.
++        """
++        token_id = self._get_app_cred_token(unrestricted=False)
++        uri = self._get_ec2_cred_uri()
++        self.post(
++            uri,
++            body={'tenant_id': self.project_id},
++            token=token_id,
++            expected_status=http.client.FORBIDDEN,
++        )
++
++    def test_ec2_create_credential_with_unrestricted_app_cred(self):
++        """Test that an unrestricted app cred can create EC2 credentials."""
++        token_id = self._get_app_cred_token(unrestricted=True)
++        uri = self._get_ec2_cred_uri()
++        r = self.post(
++            uri,
++            body={'tenant_id': self.project_id},
++            token=token_id,
++            expected_status=http.client.CREATED,
++        )
++        ec2_cred = r.result['credential']
++        self.assertEqual(self.user_id, ec2_cred['user_id'])
++        self.assertEqual(self.project_id, ec2_cred['tenant_id'])
+-- 
+2.53.0
+
