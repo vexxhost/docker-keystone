@@ -1,18 +1,33 @@
-From 3d312a6ce35734aa490b2928d0a6f59fd2077119 Mon Sep 17 00:00:00 2001
+From 817abe6c2ba5bd64bcb5110f128c723e783c410d Mon Sep 17 00:00:00 2001
 From: ricolin <rlin@vexxhost.com>
-Date: Mon, 8 Sep 2025 09:56:09 +0800
+Date: Thu, 23 Apr 2026 01:24:42 +0000
 Subject: [PATCH] Revert "setup: Remove pbr's wsgi_scripts"
 
 This reverts commit 0d2cc1a3af4dbd2825cef5992056bffe935eaadd.
 ---
+ pyproject.toml                                            | 4 ++++
  .../notes/remove-wsgi-scripts-615b97ee4d6e0de2.yaml       | 8 --------
- setup.cfg                                                 | 4 ++++
  2 files changed, 4 insertions(+), 8 deletions(-)
  delete mode 100644 releasenotes/notes/remove-wsgi-scripts-615b97ee4d6e0de2.yaml
 
+diff --git a/pyproject.toml b/pyproject.toml
+index 4d27974..136f34b 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -165,6 +165,10 @@ keystone = "keystone.common.policies:list_rules"
+ keystone-manage = "keystone.cmd.manage:main"
+ keystone-status = "keystone.cmd.status:main"
+ 
++[project.entry-points.wsgi_scripts]
++keystone-wsgi-admin = "keystone.server.wsgi:initialize_admin_application"
++keystone-wsgi-public = "keystone.server.wsgi:initialize_public_application"
++
+ [project.optional-dependencies]
+ ldap = [
+     "python-ldap>=3.0.0", # PSF
 diff --git a/releasenotes/notes/remove-wsgi-scripts-615b97ee4d6e0de2.yaml b/releasenotes/notes/remove-wsgi-scripts-615b97ee4d6e0de2.yaml
 deleted file mode 100644
-index 7eb670e3c..000000000
+index 7eb670e..0000000
 --- a/releasenotes/notes/remove-wsgi-scripts-615b97ee4d6e0de2.yaml
 +++ /dev/null
 @@ -1,8 +0,0 @@
@@ -24,20 +39,6 @@ index 7eb670e3c..000000000
 -    module paths for the service, ``keystone.wsgi.api``, if their chosen WSGI
 -    server supports this (gunicorn, uWSGI) or implement a ``.wsgi`` script
 -    themselves if not (mod_wsgi).
-diff --git a/setup.cfg b/setup.cfg
-index 7b0662c7e..1511d4dd5 100644
---- a/setup.cfg
-+++ b/setup.cfg
-@@ -38,6 +38,10 @@ console_scripts =
-     keystone-manage = keystone.cmd.manage:main
-     keystone-status = keystone.cmd.status:main
- 
-+wsgi_scripts =
-+    keystone-wsgi-admin = keystone.server.wsgi:initialize_admin_application
-+    keystone-wsgi-public = keystone.server.wsgi:initialize_public_application
-+
- keystone.assignment =
-     sql = keystone.assignment.backends.sql:Assignment
- 
 -- 
 2.25.1
+
