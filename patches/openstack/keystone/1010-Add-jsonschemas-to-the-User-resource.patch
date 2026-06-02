@@ -1,0 +1,649 @@
+From b41686e5ff48c028833b29f0a6cb6f9ec5cf5082 Mon Sep 17 00:00:00 2001
+From: Artem Goncharov <artem.goncharov@gmail.com>
+Date: Thu, 9 Jan 2025 10:30:54 +0100
+Subject: [PATCH 1010/1026] Add jsonschemas to the User resource
+
+Change-Id: I4e72b24ecae19606abb7ba076ce8d8d87c21c085
+(cherry picked from commit fcf8b4c6cef8f7421865602853a1340e03b33ce9)
+---
+ keystone/api/users.py                  |  84 +++++++++++---
+ keystone/identity/schema.py            | 143 +++++++++++++++++++++---
+ keystone/tests/unit/test_validation.py | 149 +++++++++++++++----------
+ 3 files changed, 287 insertions(+), 89 deletions(-)
+
+diff --git a/keystone/api/users.py b/keystone/api/users.py
+index f39978baf..898a2501b 100644
+--- a/keystone/api/users.py
++++ b/keystone/api/users.py
+@@ -180,17 +180,10 @@ class UserResource(ks_flask.ResourceBase):
+         api='identity_api', method='get_user'
+     )
+ 
+-    def get(self, user_id=None):
+-        """Get a user resource or list users.
+-
+-        GET/HEAD /v3/users
+-        GET/HEAD /v3/users/{user_id}
+-        """
+-        if user_id is not None:
+-            return self._get_user(user_id)
+-        return self._list_users()
+-
+-    def _get_user(self, user_id):
++    @validation.request_query_schema(None)
++    @validation.request_body_schema(None)
++    @validation.response_body_schema(schema.user_get_response_body)
++    def get(self, user_id: str):
+         """Get a user resource.
+ 
+         GET/HEAD /v3/users/{user_id}
+@@ -202,7 +195,55 @@ class UserResource(ks_flask.ResourceBase):
+         ref = PROVIDERS.identity_api.get_user(user_id)
+         return self.wrap_member(ref)
+ 
+-    def _list_users(self):
++    @validation.request_query_schema(None)
++    @validation.request_body_schema(schema.user_update_request)
++    @validation.response_body_schema(schema.user_update_request)
++    def patch(self, user_id: str):
++        """Update a user.
++
++        PATCH /v3/users/{user_id}
++        """
++        ENFORCER.enforce_call(
++            action='identity:update_user',
++            build_target=_build_user_target_enforcement,
++        )
++        PROVIDERS.identity_api.get_user(user_id)
++        user_data = self.request_body_json.get('user', {})
++        self._require_matching_id(user_data)
++        ref = PROVIDERS.identity_api.update_user(
++            user_id, user_data, initiator=self.audit_initiator
++        )
++        return self.wrap_member(ref)
++
++    @validation.request_query_schema(None)
++    @validation.request_body_schema(None)
++    @validation.response_body_schema(None)
++    def delete(self, user_id: str):
++        """Delete a user.
++
++        DELETE /v3/users/{user_id}
++        """
++        ENFORCER.enforce_call(
++            action='identity:delete_user',
++            build_target=_build_user_target_enforcement,
++        )
++        PROVIDERS.identity_api.delete_user(
++            user_id, initiator=self.audit_initiator
++        )
++        return None, http.client.NO_CONTENT
++
++
++class UsersResource(ks_flask.ResourceBase):
++    collection_key = 'users'
++    member_key = 'user'
++    get_member_from_driver = PROVIDERS.deferred_provider_lookup(
++        api='identity_api', method='get_user'
++    )
++
++    @validation.request_query_schema(schema.user_index_request_query)
++    @validation.request_body_schema(None)
++    @validation.response_body_schema(schema.user_index_response_body)
++    def get(self):
+         """List users.
+ 
+         GET/HEAD /v3/users
+@@ -244,6 +285,9 @@ class UserResource(ks_flask.ResourceBase):
+ 
+         return self.wrap_collection(users, hints=hints)
+ 
++    @validation.request_query_schema(None)
++    @validation.request_body_schema(schema.user_create_request)
++    @validation.response_body_schema(schema.user_create_request)
+     def post(self):
+         """Create a user.
+ 
+@@ -254,7 +298,6 @@ class UserResource(ks_flask.ResourceBase):
+         ENFORCER.enforce_call(
+             action='identity:create_user', target_attr=target
+         )
+-        ks_validation.lazy_validate(schema.user_create, user_data)
+         user_data = self._normalize_dict(user_data)
+         user_data = self._normalize_domain_id(user_data)
+         ref = PROVIDERS.identity_api.create_user(
+@@ -831,8 +874,21 @@ class UserAccessRuleGetDeleteResource(ks_flask.ResourceBase):
+ class UserAPI(ks_flask.APIBase):
+     _name = 'users'
+     _import_name = __name__
+-    resources = [UserResource]
+     resource_mapping = [
++        ks_flask.construct_resource_map(
++            resource=UsersResource,
++            url='/users',
++            resource_kwargs={},
++            rel='users',
++            path_vars={},
++        ),
++        ks_flask.construct_resource_map(
++            resource=UserResource,
++            url='/users/<string:user_id>',
++            resource_kwargs={},
++            rel='user',
++            path_vars={'user_id': json_home.Parameters.USER_ID},
++        ),
+         ks_flask.construct_resource_map(
+             resource=UserChangePasswordResource,
+             url='/users/<string:user_id>/password',
+diff --git a/keystone/identity/schema.py b/keystone/identity/schema.py
+index 23bee9bcc..0f4ef217f 100644
+--- a/keystone/identity/schema.py
++++ b/keystone/identity/schema.py
+@@ -10,15 +10,19 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
++import copy
++from typing import Any
++
++from keystone.api.validation import parameter_types
++from keystone.api.validation import response_types
+ from keystone.common import validation
+-from keystone.common.validation import parameter_types
+ import keystone.conf
+ from keystone.identity.backends import resource_options as ro
+ 
+ CONF = keystone.conf.CONF
+ 
+ 
+-_identity_name = {
++_identity_name: dict[str, Any] = {
+     'type': 'string',
+     'minLength': 1,
+     'maxLength': 255,
+@@ -27,7 +31,54 @@ _identity_name = {
+ 
+ # Schema for Identity v3 API
+ 
+-_user_properties = {
++user_index_request_query: dict[str, Any] = {
++    "type": "object",
++    "properties": {
++        "domain_id": parameter_types.domain_id,
++        "enabled": {
++            "description": "Whether the identity provider is enabled or not",
++            **parameter_types.boolean,
++        },
++        "idp_id": {
++            "type": "string",
++            "description": "Filters the response by an identity provider ID.",
++        },
++        "name": parameter_types.name,
++        "password_expires_at": {
++            "type": "string",
++            "description": (
++                "Filter results based on which user passwords have "
++                "expired. The query should include an operator and "
++                "a timestamp with a colon (:) separating the two, for "
++                "example: `password_expires_at={operator}:{timestamp}`\n"
++                "Valid operators are: lt, lte, gt, gte, eq, and neq\n"
++                "  - lt: expiration time lower than the timestamp\n"
++                "  - lte: expiration time lower than or equal to the timestamp\n"
++                "  - gt: expiration time higher than the timestamp\n"
++                "  - gte: expiration time higher than or equal to the timestamp\n"
++                "  - eq: expiration time equal to the timestamp\n"
++                "  - neq: expiration time not equal to the timestamp\n\n"
++                "Valid timestamps are of the form: `YYYY-MM-DDTHH:mm:ssZ`."
++                "For example:"
++                "`/v3/users?password_expires_at=lt:2016-12-08T22:02:00Z`\n"
++                "The example would return a list of users whose password "
++                "expired before the timestamp `(2016-12-08T22:02:00Z).`"
++            ),
++        },
++        "protocol_id": {
++            "type": "string",
++            "description": "Filters the response by a protocol ID.",
++        },
++        "unique_id": {
++            "type": "string",
++            "description": "Filters the response by a unique ID.",
++        },
++    },
++    "additionalProperties": True,
++}
++
++_user_properties: dict[str, Any] = {
++    'id': {"type": "string", "description": "The user ID.", "readOnly": True},
+     'default_project_id': validation.nullable(parameter_types.id_string),
+     'description': validation.nullable(parameter_types.description),
+     'domain_id': parameter_types.id_string,
+@@ -54,29 +105,87 @@ _user_properties = {
+             'required': ['idp_id', 'protocols'],
+         },
+     },
++    'links': response_types.links,
+     'name': _identity_name,
+-    'password': {'type': ['string', 'null']},
++    'password_expires_at': {
++        "type": ["string", "null"],
++        "format": "date-time",
++        "description": (
++            "The date and time when the password expires. The time zone is UTC. "
++            "This is a response object attribute; not valid for requests. A "
++            "null value indicates that the password never expires."
++        ),
++        "readOnly": True,
++    },
+     'options': ro.USER_OPTIONS_REGISTRY.json_schema,
+ }
+ 
+-# TODO(notmorgan): Provide a mechanism for options to supply real jsonschema
+-# validation based upon the option object and the option validator(s)
+-user_create = {
+-    'type': 'object',
+-    'properties': _user_properties,
+-    'required': ['name'],
+-    'options': {'type': 'object'},
+-    'additionalProperties': True,
++user_schema: dict[str, Any] = {
++    "type": "object",
++    "properties": _user_properties,
++    # NOTE(gtema) User resource supports additional attributes which are stored
++    # in the `extra` DB field
++    "additionalProperties": True,
++}
++
++user_index_response_body: dict[str, Any] = {
++    "type": "object",
++    "properties": {
++        "users": {"type": "array", "items": user_schema},
++        "links": response_types.links,
++        "truncated": response_types.truncated,
++    },
++    "additionalProperties": False,
+ }
+ 
+-user_update = {
++user_get_response_body: dict[str, Any] = {
++    "type": "object",
++    "properties": {"user": user_schema},
++    "required": ["user"],
++    "additionalProperties": False,
++}
++
++user_create_request: dict[str, Any] = {
++    "type": "object",
++    "properties": {
++        "user": {
++            "type": "object",
++            "properties": {
++                "password": {"type": ["string", "null"]},
++                **_user_properties,
++            },
++            "required": ["name"],
++            "additionalProperties": True,
++        }
++    },
++    "required": ["user"],
++    "additionalProperties": False,
++}
++
++user_create_response_body: dict[str, Any] = user_get_response_body
++
++user_update_properties = copy.deepcopy(_user_properties)
++# It is not allowed anymore to update domain of the existing user
++user_update_properties.pop("domain_id", None)
++user_update_request: dict[str, Any] = {
+     'type': 'object',
+-    'properties': _user_properties,
+-    'minProperties': 1,
+-    'options': {'type': 'object'},
+-    'additionalProperties': True,
++    'properties': {
++        'user': {
++            'type': 'object',
++            'properties': {
++                'password': {'type': ['string', 'null']},
++                **user_update_properties,
++            },
++            'minProperties': 1,
++            'additionalProperties': True,
++        }
++    },
++    'required': ['user'],
++    'additionalProperties': False,
+ }
+ 
++user_update_response_body: dict[str, Any] = user_get_response_body
++
+ _group_properties = {
+     'description': validation.nullable(parameter_types.description),
+     'domain_id': parameter_types.id_string,
+diff --git a/keystone/tests/unit/test_validation.py b/keystone/tests/unit/test_validation.py
+index 6e9d0fb7b..10892f4a7 100644
+--- a/keystone/tests/unit/test_validation.py
++++ b/keystone/tests/unit/test_validation.py
+@@ -2283,26 +2283,28 @@ class UserValidationTestCase(unit.BaseTestCase):
+ 
+         self.user_name = uuid.uuid4().hex
+ 
+-        create = identity_schema.user_create
+-        update = identity_schema.user_update
++        create = identity_schema.user_create_request
++        update = identity_schema.user_update_request
+         self.create_user_validator = validators.SchemaValidator(create)
+         self.update_user_validator = validators.SchemaValidator(update)
+ 
+     def test_validate_user_create_request_succeeds(self):
+         """Test that validating a user create request succeeds."""
+-        request_to_validate = {'name': self.user_name}
++        request_to_validate = {'user': {'name': self.user_name}}
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_validate_user_create_with_all_valid_parameters_succeeds(self):
+         """Test that validating a user create request succeeds."""
+-        request_to_validate = unit.new_user_ref(
+-            domain_id=uuid.uuid4().hex, name=self.user_name
+-        )
++        request_to_validate = {
++            'user': unit.new_user_ref(
++                domain_id=uuid.uuid4().hex, name=self.user_name
++            )
++        }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_validate_user_create_fails_without_name(self):
+         """Exception raised when validating a user without name."""
+-        request_to_validate = {'email': uuid.uuid4().hex}
++        request_to_validate = {'user': {'email': uuid.uuid4().hex}}
+         self.assertRaises(
+             exception.SchemaValidationError,
+             self.create_user_validator.validate,
+@@ -2312,15 +2314,16 @@ class UserValidationTestCase(unit.BaseTestCase):
+     def test_validate_user_create_succeeds_with_valid_enabled_formats(self):
+         """Validate acceptable enabled formats in create user requests."""
+         for enabled in _VALID_ENABLED_FORMATS:
+-            request_to_validate = {'name': self.user_name, 'enabled': enabled}
++            request_to_validate = {
++                'user': {'name': self.user_name, 'enabled': enabled}
++            }
+             self.create_user_validator.validate(request_to_validate)
+ 
+     def test_validate_user_create_fails_with_invalid_enabled_formats(self):
+         """Exception raised when enabled is not an acceptable format."""
+         for invalid_enabled in _INVALID_ENABLED_FORMATS:
+             request_to_validate = {
+-                'name': self.user_name,
+-                'enabled': invalid_enabled,
++                'user': {'name': self.user_name, 'enabled': invalid_enabled}
+             }
+             self.assertRaises(
+                 exception.SchemaValidationError,
+@@ -2331,24 +2334,29 @@ class UserValidationTestCase(unit.BaseTestCase):
+     def test_validate_user_create_succeeds_with_extra_attributes(self):
+         """Validate extra parameters on user create requests."""
+         request_to_validate = {
+-            'name': self.user_name,
+-            'other_attr': uuid.uuid4().hex,
++            'user': {'name': self.user_name, 'other_attr': uuid.uuid4().hex}
+         }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_validate_user_create_succeeds_with_password_of_zero_length(self):
+         """Validate empty password on user create requests."""
+-        request_to_validate = {'name': self.user_name, 'password': ''}
++        request_to_validate = {
++            'user': {'name': self.user_name, 'password': ''}
++        }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_validate_user_create_succeeds_with_null_password(self):
+         """Validate that password is nullable on create user."""
+-        request_to_validate = {'name': self.user_name, 'password': None}
++        request_to_validate = {
++            'user': {'name': self.user_name, 'password': None}
++        }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_validate_user_create_fails_with_invalid_password_type(self):
+         """Exception raised when user password is of the wrong type."""
+-        request_to_validate = {'name': self.user_name, 'password': True}
++        request_to_validate = {
++            'user': {'name': self.user_name, 'password': True}
++        }
+         self.assertRaises(
+             exception.SchemaValidationError,
+             self.create_user_validator.validate,
+@@ -2357,13 +2365,15 @@ class UserValidationTestCase(unit.BaseTestCase):
+ 
+     def test_validate_user_create_succeeds_with_null_description(self):
+         """Validate that description can be nullable on create user."""
+-        request_to_validate = {'name': self.user_name, 'description': None}
++        request_to_validate = {
++            'user': {'name': self.user_name, 'description': None}
++        }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_validate_user_create_fails_with_invalid_name(self):
+         """Exception when validating a create request with invalid `name`."""
+         for invalid_name in _INVALID_NAMES:
+-            request_to_validate = {'name': invalid_name}
++            request_to_validate = {'user': {'name': invalid_name}}
+             self.assertRaises(
+                 exception.SchemaValidationError,
+                 self.create_user_validator.validate,
+@@ -2372,12 +2382,12 @@ class UserValidationTestCase(unit.BaseTestCase):
+ 
+     def test_validate_user_update_succeeds(self):
+         """Validate an update user request."""
+-        request_to_validate = {'email': uuid.uuid4().hex}
++        request_to_validate = {'user': {'email': uuid.uuid4().hex}}
+         self.update_user_validator.validate(request_to_validate)
+ 
+     def test_validate_user_update_fails_with_no_parameters(self):
+         """Exception raised when updating nothing."""
+-        request_to_validate = {}
++        request_to_validate = {'user': {}}
+         self.assertRaises(
+             exception.SchemaValidationError,
+             self.update_user_validator.validate,
+@@ -2386,13 +2396,13 @@ class UserValidationTestCase(unit.BaseTestCase):
+ 
+     def test_validate_user_update_succeeds_with_extra_parameters(self):
+         """Validate user update requests with extra parameters."""
+-        request_to_validate = {'other_attr': uuid.uuid4().hex}
++        request_to_validate = {'user': {'other_attr': uuid.uuid4().hex}}
+         self.update_user_validator.validate(request_to_validate)
+ 
+     def test_validate_user_update_fails_with_invalid_name(self):
+         """Exception when validating an update request with invalid `name`."""
+         for invalid_name in _INVALID_NAMES:
+-            request_to_validate = {'name': invalid_name}
++            request_to_validate = {'user': {'name': invalid_name}}
+             self.assertRaises(
+                 exception.SchemaValidationError,
+                 self.update_user_validator.validate,
+@@ -2400,13 +2410,12 @@ class UserValidationTestCase(unit.BaseTestCase):
+             )
+ 
+     def test_user_create_succeeds_with_empty_options(self):
+-        request_to_validate = {'name': self.user_name, 'options': {}}
++        request_to_validate = {'user': {'name': self.user_name, 'options': {}}}
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_user_create_options_fails_invalid_option(self):
+         request_to_validate = {
+-            'name': self.user_name,
+-            'options': {'whatever': True},
++            'user': {'name': self.user_name, 'options': {'whatever': True}}
+         }
+         self.assertRaises(
+             exception.SchemaValidationError,
+@@ -2416,15 +2425,21 @@ class UserValidationTestCase(unit.BaseTestCase):
+ 
+     def test_user_create_with_options_change_password_required(self):
+         request_to_validate = {
+-            'name': self.user_name,
+-            'options': {ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: True},
++            'user': {
++                'name': self.user_name,
++                'options': {ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: True},
++            }
+         }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_user_create_options_change_password_required_wrong_type(self):
+         request_to_validate = {
+-            'name': self.user_name,
+-            'options': {ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: 'whatever'},
++            'user': {
++                'name': self.user_name,
++                'options': {
++                    ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: 'whatever'
++                },
++            }
+         }
+         self.assertRaises(
+             exception.SchemaValidationError,
+@@ -2434,82 +2449,100 @@ class UserValidationTestCase(unit.BaseTestCase):
+ 
+     def test_user_create_options_change_password_required_none(self):
+         request_to_validate = {
+-            'name': self.user_name,
+-            'options': {ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: None},
++            'user': {
++                'name': self.user_name,
++                'options': {ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: None},
++            }
+         }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_user_update_with_options_change_password_required(self):
+         request_to_validate = {
+-            'options': {ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: False}
++            'user': {
++                'options': {ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: False}
++            }
+         }
+         self.update_user_validator.validate(request_to_validate)
+ 
+     def test_user_create_with_options_lockout_password(self):
+         request_to_validate = {
+-            'name': self.user_name,
+-            'options': {ro.IGNORE_LOCKOUT_ATTEMPT_OPT.option_name: True},
++            'user': {
++                'name': self.user_name,
++                'options': {ro.IGNORE_LOCKOUT_ATTEMPT_OPT.option_name: True},
++            }
+         }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_user_update_with_options_lockout_password(self):
+         request_to_validate = {
+-            'options': {ro.IGNORE_LOCKOUT_ATTEMPT_OPT.option_name: False}
++            'user': {
++                'options': {ro.IGNORE_LOCKOUT_ATTEMPT_OPT.option_name: False}
++            }
+         }
+         self.update_user_validator.validate(request_to_validate)
+ 
+     def test_user_update_with_two_options(self):
+         request_to_validate = {
+-            'options': {
+-                ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: True,
+-                ro.IGNORE_LOCKOUT_ATTEMPT_OPT.option_name: True,
++            'user': {
++                'options': {
++                    ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: True,
++                    ro.IGNORE_LOCKOUT_ATTEMPT_OPT.option_name: True,
++                }
+             }
+         }
+         self.update_user_validator.validate(request_to_validate)
+ 
+     def test_user_create_with_two_options(self):
+         request_to_validate = {
+-            'name': self.user_name,
+-            'options': {
+-                ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: False,
+-                ro.IGNORE_LOCKOUT_ATTEMPT_OPT.option_name: True,
+-            },
++            'user': {
++                'name': self.user_name,
++                'options': {
++                    ro.IGNORE_CHANGE_PASSWORD_OPT.option_name: False,
++                    ro.IGNORE_LOCKOUT_ATTEMPT_OPT.option_name: True,
++                },
++            }
+         }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_user_create_with_mfa_rules(self):
+         request_to_validate = {
+-            'name': self.user_name,
+-            'options': {
+-                ro.MFA_RULES_OPT.option_name: [
+-                    [uuid.uuid4().hex, uuid.uuid4().hex],
+-                    [uuid.uuid4().hex],
+-                ]
+-            },
++            'user': {
++                'name': self.user_name,
++                'options': {
++                    ro.MFA_RULES_OPT.option_name: [
++                        [uuid.uuid4().hex, uuid.uuid4().hex],
++                        [uuid.uuid4().hex],
++                    ]
++                },
++            }
+         }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_user_update_with_mfa_rules(self):
+         request_to_validate = {
+-            'options': {
+-                ro.MFA_RULES_OPT.option_name: [
+-                    [uuid.uuid4().hex, uuid.uuid4().hex],
+-                    [uuid.uuid4().hex],
+-                ]
++            'user': {
++                'options': {
++                    ro.MFA_RULES_OPT.option_name: [
++                        [uuid.uuid4().hex, uuid.uuid4().hex],
++                        [uuid.uuid4().hex],
++                    ]
++                }
+             }
+         }
+         self.update_user_validator.validate(request_to_validate)
+ 
+     def test_user_create_with_mfa_rules_enabled(self):
+         request_to_validate = {
+-            'name': self.user_name,
+-            'options': {ro.MFA_ENABLED_OPT.option_name: True},
++            'user': {
++                'name': self.user_name,
++                'options': {ro.MFA_ENABLED_OPT.option_name: True},
++            }
+         }
+         self.create_user_validator.validate(request_to_validate)
+ 
+     def test_user_update_mfa_rules_enabled(self):
+         request_to_validate = {
+-            'options': {ro.MFA_ENABLED_OPT.option_name: False}
++            'user': {'options': {ro.MFA_ENABLED_OPT.option_name: False}}
+         }
+         self.update_user_validator.validate(request_to_validate)
+ 
+@@ -2532,7 +2565,7 @@ class UserValidationTestCase(unit.BaseTestCase):
+         ]
+         for ruleset, exception_class in test_cases:
+             request_to_validate = {
+-                'options': {ro.MFA_RULES_OPT.option_name: ruleset}
++                'user': {'options': {ro.MFA_RULES_OPT.option_name: ruleset}}
+             }
+             # JSON Schema Validation
+             self.assertRaises(
+-- 
+2.53.0
+
