@@ -17,12 +17,12 @@ jobs:
       packages: write
       pull-requests: write
     steps:
-      - uses: vexxhost/docker-atmosphere/.github/actions/checkout@56b3dda2bc9f2e464de8997bdafd998cdb1e54a2 # main
+      - uses: vexxhost/docker-atmosphere/.github/actions/checkout@e012e9b7df8e22166070c4389caf52285807598a # main
         with:
           repository: openstack/keystone
           ref: 4e2e36ad7767a459277987d21f748cec54ac09e0 # stable/2024.1
 
-      - uses: vexxhost/docker-atmosphere/.github/actions/build-image@56b3dda2bc9f2e464de8997bdafd998cdb1e54a2 # main
+      - uses: vexxhost/docker-atmosphere/.github/actions/build-image@e012e9b7df8e22166070c4389caf52285807598a # main
         with:
           image-name: keystone
           build-contexts: keystone=openstack/keystone
