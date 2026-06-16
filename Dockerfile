@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: © 2025 VEXXHOST, Inc.
+# SPDX-FileCopyrightText: © 2026 VEXXHOST, Inc.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 FROM ghcr.io/vexxhost/openstack-venv-builder:main@sha256:dd3adf3788a31aad0997c9ed789457b74bb4b7f1d83723aafae9af458cd942ce AS build
@@ -23,9 +23,13 @@ apt-get clean
 rm -rf /var/lib/apt/lists/*
 EOF
 ARG MOD_AUTH_OPENIDC_VERSION=2.4.18.1
+# NOTE: Always use compatible version of liboauth2 and mod_oauth2,
+#       otherwise mod_oauth2 will fail to load due to missing shared library.
+ARG LIBOAUTH2_VERSION=2.1.1
+ARG MOD_OAUTH2_VERSION=4.1.0
 ARG TARGETARCH
 RUN <<EOF bash -xe
-# TODO(mnaser): mod_auth_openidc does not have aarch64 builds
+# TODO(mnaser): mod_auth_openidc and mod_oauth2 does not have aarch64 builds
 if [ "${TARGETARCH}" = "arm64" ]; then
     exit 0
 fi
@@ -34,10 +38,21 @@ apt-get update -qq
 apt-get install -qq -y --no-install-recommends \
     curl
 curl -LO https://github.com/OpenIDC/mod_auth_openidc/releases/download/v${MOD_AUTH_OPENIDC_VERSION}/libapache2-mod-auth-openidc_${MOD_AUTH_OPENIDC_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
-apt-get install -y --no-install-recommends ./libapache2-mod-auth-openidc_${MOD_AUTH_OPENIDC_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
-a2enmod auth_openidc
+curl -LO https://github.com/OpenIDC/liboauth2/releases/download/v${LIBOAUTH2_VERSION}/liboauth2_${LIBOAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
+curl -LO https://github.com/OpenIDC/liboauth2/releases/download/v${LIBOAUTH2_VERSION}/liboauth2-apache_${LIBOAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
+curl -LO https://github.com/OpenIDC/mod_oauth2/releases/download/v${MOD_OAUTH2_VERSION}/libapache2-mod-oauth2_${MOD_OAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
+apt-get install -y --no-install-recommends \
+    ./libapache2-mod-auth-openidc_${MOD_AUTH_OPENIDC_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb \
+    ./liboauth2_${LIBOAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb \
+    ./liboauth2-apache_${LIBOAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb \
+    ./libapache2-mod-oauth2_${MOD_OAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
+a2enmod auth_openidc oauth2
 apt-get purge -y --auto-remove curl
 apt-get clean
-rm -rfv /var/lib/apt/lists/* libapache2-mod-auth-openidc_${MOD_AUTH_OPENIDC_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
+rm -rfv /var/lib/apt/lists/* \
+    libapache2-mod-auth-openidc_${MOD_AUTH_OPENIDC_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb \
+    liboauth2_${LIBOAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb \
+    liboauth2-apache_${LIBOAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb \
+    libapache2-mod-oauth2_${MOD_OAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
 EOF
 COPY --from=build --link /var/lib/openstack /var/lib/openstack
