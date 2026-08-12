@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © 2025 VEXXHOST, Inc.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-FROM ghcr.io/vexxhost/openstack-venv-builder:2023.1@sha256:3699947029d2b9d53abed236a9e584e94b7a9745b09ba8eb57816aa65b12d9d1 AS build
+FROM ghcr.io/vexxhost/openstack-venv-builder:2023.1@sha256:a85187903af234e9ad21daaf9006bd5013f8c7f42b900eb02047de64fe4c83d6 AS build
 RUN --mount=type=bind,from=keystone,source=/,target=/src/keystone,readwrite <<EOF bash -xe
 uv pip install \
     --constraint /upper-constraints.txt \
@@ -9,7 +9,7 @@ uv pip install \
         keystone-keycloak-backend==0.5.0
 EOF
 
-FROM ghcr.io/vexxhost/python-base:2023.1@sha256:9591de1653e2ab8bf7c25cb63a65c0b7ec443e5e0632cbe05f20190ae11e8e61
+FROM ghcr.io/vexxhost/python-base:2023.1@sha256:63d36dd9010d9448a313a5d387f233aa47c2c768388ba0cdadad107f43847df9
 RUN \
     groupadd -g 42424 keystone && \
     useradd -u 42424 -g 42424 -M -d /var/lib/keystone -s /usr/sbin/nologin -c "Keystone User" keystone && \
