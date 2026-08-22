@@ -25,12 +25,12 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: vexxhost/docker-atmosphere/.github/actions/checkout@e012e9b7df8e22166070c4389caf52285807598a # main
+      - uses: vexxhost/docker-atmosphere/.github/actions/checkout@b6113e0668dc85929f783667f0347fc76b272844 # main
         with:
           repository: openstack/keystone
           ref: b6fd80996b882890a51f3e2aab41d952d7ff68ae # master
 
-      - uses: vexxhost/docker-atmosphere/.github/actions/build-image@e012e9b7df8e22166070c4389caf52285807598a # main
+      - uses: vexxhost/docker-atmosphere/.github/actions/build-image@b6113e0668dc85929f783667f0347fc76b272844 # main
         with:
           image-name: keystone
           build-contexts: keystone=openstack/keystone
