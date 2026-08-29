@@ -1,0 +1,146 @@
+From 065103d5d2d9fabe5c65e6a3890efd7ed5dd3d7f Mon Sep 17 00:00:00 2001
+From: Stephen Finucane <stephenfin@redhat.com>
+Date: Tue, 25 Mar 2025 17:57:26 +0000
+Subject: [PATCH 1010/1024] api: Don't restrict unknown querystring parameters
+ yet
+
+We will address this in a new API version. For now, such a change would
+be a breaking one.
+
+No release note is included since these changes haven't been released
+yet.
+
+Change-Id: I1e862cb1c5e9c218cea59800ff759a1b094b5906
+Signed-off-by: Stephen Finucane <stephenfin@redhat.com>
+Closes-Bug: #2104185
+(cherry picked from commit 05cc3d1903c1bfe669a1032746aa9e7b197238e9)
+(cherry picked from commit 79c90794adc8fd0f81caf27d2e9a5d48cde0f20d)
+---
+ keystone/application_credential/schema.py         | 12 +++++++++---
+ keystone/credential/schema.py                     |  3 +++
+ keystone/identity/schema.py                       |  2 ++
+ keystone/resource/schema.py                       |  3 +++
+ .../tests/unit/test_v3_application_credential.py  | 15 ++++++++++++++-
+ 5 files changed, 31 insertions(+), 4 deletions(-)
+
+diff --git a/keystone/application_credential/schema.py b/keystone/application_credential/schema.py
+index 886d567b5..b4bb2da0a 100644
+--- a/keystone/application_credential/schema.py
++++ b/keystone/application_credential/schema.py
+@@ -70,7 +70,9 @@ access_rule_schema: dict[str, Any] = {
+ index_request_query: dict[str, Any] = {
+     "type": "object",
+     "properties": {},
+-    "additionalProperties": False,
++    # TODO(stephenfin): Change this to False once we have schemas for all
++    # resources. Doing so will remove comparator (name__icontains) support.
++    "additionalProperties": True,
+ }
+ 
+ # Response of the `/access_rules` API
+@@ -92,7 +94,9 @@ rule_index_response_body: dict[str, Any] = {
+ rule_show_request_query: dict[str, Any] = {
+     "type": "object",
+     "properties": {},
+-    "additionalProperties": False,
++    # TODO(stephenfin): Change this to False once we have schemas for all
++    # resources.
++    "additionalProperties": True,
+ }
+ 
+ # Response of `/access_rules/{access_rule_id}` API returning
+@@ -216,7 +220,9 @@ application_credential_index_request_query: dict[str, Any] = {
+             ),
+         }
+     },
+-    "additionalProperties": False,
++    # TODO(stephenfin): Change this to False once we have schemas for all
++    # resources. Doing so will remove comparator (name__icontains) support.
++    "additionalProperties": True,
+ }
+ 
+ # Response of the `/application_credentials` API
+diff --git a/keystone/credential/schema.py b/keystone/credential/schema.py
+index 1cd17d01d..6348db426 100644
+--- a/keystone/credential/schema.py
++++ b/keystone/credential/schema.py
+@@ -70,6 +70,9 @@ index_request_query: dict[str, Any] = {
+             ),
+         },
+     },
++    # TODO(stephenfin): Change this to False once we have schemas for all
++    # resources. Doing so will remove comparator (type__icontains) support.
++    "additionalProperties": True,
+ }
+ 
+ # Response of the `/credentials` API
+diff --git a/keystone/identity/schema.py b/keystone/identity/schema.py
+index 0f4ef217f..26165cf10 100644
+--- a/keystone/identity/schema.py
++++ b/keystone/identity/schema.py
+@@ -74,6 +74,8 @@ user_index_request_query: dict[str, Any] = {
+             "description": "Filters the response by a unique ID.",
+         },
+     },
++    # TODO(stephenfin): Change this to False once we have schemas for all
++    # resources. Doing so will remove comparator (name__icontains) support.
+     "additionalProperties": True,
+ }
+ 
+diff --git a/keystone/resource/schema.py b/keystone/resource/schema.py
+index b3480dd6a..d289b3184 100644
+--- a/keystone/resource/schema.py
++++ b/keystone/resource/schema.py
+@@ -116,6 +116,9 @@ project_index_request_query = {
+         "not-tags": parameter_types.tags,
+         "not-tags-any": parameter_types.tags,
+     },
++    # TODO(stephenfin): Change this to False once we have schemas for all
++    # resources. Doing so will remove comparator (name__icontains) support.
++    "additionalProperties": True,
+ }
+ 
+ project_schema: dict[str, Any] = {
+diff --git a/keystone/tests/unit/test_v3_application_credential.py b/keystone/tests/unit/test_v3_application_credential.py
+index 3c154261f..ecd8e2194 100644
+--- a/keystone/tests/unit/test_v3_application_credential.py
++++ b/keystone/tests/unit/test_v3_application_credential.py
+@@ -12,6 +12,7 @@
+ 
+ import datetime
+ import http.client
++import unittest
+ import uuid
+ 
+ import http.client
+@@ -710,7 +711,10 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
+             ar = r.json["access_rules"]
+             self.assertEqual(access_rules[0]["method"], ar[0]["method"])
+ 
+-    def test_list_access_rules_wrong_qp(self):
++    # TODO(stephenfin): This will pass once we increase strictness of the query
++    # string validation
++    @unittest.expectedFailure
++    def test_list_access_rules_invalid_qs(self):
+         with self.test_client() as c:
+             token = self.get_scoped_token()
+             # Invoke GET access_rules with unsupported query parameters and
+@@ -746,6 +750,15 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
+                 expected_status_code=http.client.OK,
+                 headers={"X-Auth-Token": token},
+             )
++
++    # TODO(stephenfin): This will pass once we increase strictness of the query
++    # string validation
++    @unittest.expectedFailure
++    def test_show_access_rule_invalid_qs(self):
++        with self.test_client() as c:
++            token = self.get_scoped_token()
++            # Invoke GET access_rules/{id} with unsupported query parameters and
++            # trigger internal validation
+             c.get(
+                 f"/v3/users/{self.user_id}/access_rules/{access_rule_id}"
+                 "?foo=bar",
+-- 
+2.53.0
+

@@ -1,0 +1,4355 @@
+From 087cd21c9f75f73d875dae7656045471494d9700 Mon Sep 17 00:00:00 2001
+From: Artem Goncharov <artem.goncharov@gmail.com>
+Date: Fri, 26 Jul 2024 18:53:06 +0200
+Subject: [PATCH 1003/1024] Enable hacking check in pre-commit
+
+Hacking is a OpenStack style guide enforcement library. Many projects
+use it.
+
+Python imports sorting check in the hacking makes lot of sense since it
+verifies the code is readable and matches the pep8 style as well.
+Convert code base with `isort --profile open_stack --sl  --py 311
+--honor-noqa  keystone` and 2 manual fixes so that hacking check passes
+(it is a bit weird case, but black forces new line before comment in an
+import while flake8-import-order thinks it is bad: keystone/api/auth.py.
+So add a noqa here since there are currently no configuration options to
+skip that.)
+
+Change-Id: I31bd6d5f37910097ef0fae72f678c758411b5b03
+(cherry picked from commit 0d293d5c7e68f2397c5369103f470399d00c3ed6)
+---
+ keystone/api/_shared/authentication.py        |  1 -
+ keystone/api/_shared/implied_roles.py         |  1 -
+ keystone/api/_shared/saml.py                  |  1 -
+ keystone/api/auth.py                          |  8 +-
+ keystone/api/credentials.py                   |  2 +-
+ keystone/api/discovery.py                     |  4 +-
+ keystone/api/domains.py                       |  5 +-
+ keystone/api/ec2tokens.py                     |  3 +-
+ keystone/api/endpoints.py                     |  4 +-
+ keystone/api/groups.py                        |  6 +-
+ keystone/api/limits.py                        |  4 +-
+ keystone/api/os_ep_filter.py                  |  4 +-
+ keystone/api/os_federation.py                 |  2 +
+ keystone/api/os_inherit.py                    |  4 +-
+ keystone/api/os_oauth1.py                     |  6 +-
+ keystone/api/os_oauth2.py                     |  3 +-
+ keystone/api/os_revoke.py                     |  1 -
+ keystone/api/os_simple_cert.py                |  1 -
+ keystone/api/policy.py                        |  3 +-
+ keystone/api/projects.py                      |  2 +-
+ keystone/api/regions.py                       |  1 -
+ keystone/api/registered_limits.py             |  4 +-
+ keystone/api/role_assignments.py              |  1 -
+ keystone/api/role_inferences.py               |  1 -
+ keystone/api/roles.py                         |  4 +-
+ keystone/api/s3tokens.py                      |  2 +-
+ keystone/api/services.py                      |  1 -
+ keystone/api/system.py                        |  6 +-
+ keystone/api/trusts.py                        |  4 +-
+ keystone/api/users.py                         |  3 +-
+ keystone/application_credential/core.py       |  1 -
+ keystone/assignment/backends/base.py          |  1 -
+ keystone/assignment/core.py                   |  1 -
+ keystone/assignment/role_backends/base.py     |  1 -
+ .../role_backends/resource_options.py         |  1 -
+ keystone/auth/core.py                         |  1 -
+ .../auth/plugins/application_credential.py    |  1 -
+ keystone/auth/plugins/base.py                 |  1 -
+ keystone/auth/plugins/core.py                 |  1 -
+ keystone/auth/plugins/external.py             |  1 -
+ keystone/auth/plugins/mapped.py               |  2 +-
+ keystone/auth/plugins/oauth1.py               |  1 -
+ keystone/auth/plugins/password.py             |  1 -
+ keystone/auth/plugins/token.py                |  1 -
+ keystone/auth/plugins/totp.py                 |  1 -
+ keystone/auth/schema.py                       |  1 -
+ keystone/catalog/backends/base.py             |  1 -
+ keystone/catalog/backends/sql.py              |  1 -
+ keystone/catalog/backends/templated.py        |  1 -
+ keystone/catalog/core.py                      |  1 -
+ keystone/cmd/doctor/__init__.py               |  1 -
+ keystone/cmd/doctor/caching.py                |  1 -
+ keystone/cmd/doctor/credential.py             |  4 +-
+ keystone/cmd/doctor/database.py               |  1 -
+ keystone/cmd/doctor/debug.py                  |  1 -
+ keystone/cmd/doctor/federation.py             |  1 -
+ keystone/cmd/doctor/ldap.py                   |  4 +-
+ keystone/cmd/doctor/security_compliance.py    |  1 -
+ keystone/cmd/doctor/tokens.py                 |  1 -
+ keystone/cmd/doctor/tokens_fernet.py          |  4 +-
+ keystone/cmd/manage.py                        |  1 -
+ keystone/common/cache/_context_cache.py       |  1 -
+ keystone/common/cache/core.py                 |  1 -
+ keystone/common/context.py                    |  1 -
+ keystone/common/fernet_utils.py               |  1 -
+ keystone/common/manager.py                    |  1 -
+ keystone/common/password_hashing.py           |  1 -
+ keystone/common/profiler.py                   |  1 -
+ keystone/common/rbac_enforcer/enforcer.py     |  1 -
+ keystone/common/rbac_enforcer/policy.py       |  1 -
+ keystone/common/render_token.py               |  1 -
+ keystone/common/sql/core.py                   |  4 +-
+ ...ration_attribute_mapping_schema_version.py |  1 -
+ ...8cdce8f248_remove_duplicate_constraints.py | 79 +++++++++++++++++++
+ keystone/common/tokenless_auth.py             |  1 -
+ keystone/common/utils.py                      |  4 +-
+ keystone/common/validation/validators.py      |  1 -
+ keystone/conf/application_credential.py       |  1 -
+ keystone/conf/assignment.py                   |  1 -
+ keystone/conf/auth.py                         |  1 -
+ keystone/conf/catalog.py                      |  1 -
+ keystone/conf/credential.py                   |  1 -
+ keystone/conf/default.py                      |  1 -
+ keystone/conf/domain_config.py                |  1 -
+ keystone/conf/endpoint_filter.py              |  1 -
+ keystone/conf/endpoint_policy.py              |  1 -
+ keystone/conf/federation.py                   |  1 -
+ keystone/conf/fernet_receipts.py              |  1 -
+ keystone/conf/fernet_tokens.py                |  1 -
+ keystone/conf/identity.py                     |  1 -
+ keystone/conf/identity_mapping.py             |  1 -
+ keystone/conf/jwt_tokens.py                   |  1 -
+ keystone/conf/ldap.py                         |  1 -
+ keystone/conf/oauth1.py                       |  1 -
+ keystone/conf/opts.py                         |  1 -
+ keystone/conf/policy.py                       |  1 -
+ keystone/conf/receipt.py                      |  1 -
+ keystone/conf/resource.py                     |  1 -
+ keystone/conf/revoke.py                       |  1 -
+ keystone/conf/role.py                         |  1 -
+ keystone/conf/saml.py                         |  1 -
+ keystone/conf/security_compliance.py          |  1 -
+ keystone/conf/shadow_users.py                 |  1 -
+ keystone/conf/tokenless_auth.py               |  1 -
+ keystone/conf/trust.py                        |  1 -
+ keystone/conf/unified_limit.py                |  1 -
+ keystone/conf/wsgi.py                         |  1 -
+ keystone/credential/backends/base.py          |  1 -
+ keystone/credential/core.py                   |  1 -
+ keystone/credential/provider.py               |  1 -
+ keystone/credential/providers/fernet/core.py  |  1 -
+ keystone/endpoint_policy/core.py              |  1 -
+ keystone/exception.py                         |  1 -
+ keystone/federation/idp.py                    |  1 -
+ keystone/federation/schema.py                 |  1 -
+ keystone/federation/utils.py                  |  1 -
+ keystone/i18n.py                              |  1 -
+ keystone/identity/backends/base.py            |  1 -
+ keystone/identity/backends/ldap/common.py     |  1 -
+ keystone/identity/backends/ldap/core.py       |  1 -
+ keystone/identity/backends/sql.py             |  1 -
+ keystone/identity/backends/sql_model.py       |  2 +-
+ keystone/identity/core.py                     |  3 +-
+ keystone/identity/generator.py                |  1 -
+ keystone/identity/id_generators/sha256.py     |  1 +
+ keystone/identity/schema.py                   |  1 -
+ keystone/identity/shadow_backends/sql.py      |  1 -
+ keystone/limit/backends/base.py               |  1 -
+ keystone/limit/backends/sql.py                |  4 +-
+ keystone/models/revoke_model.py               |  1 -
+ keystone/notifications.py                     |  1 -
+ keystone/oauth1/backends/base.py              |  1 -
+ keystone/oauth1/backends/sql.py               |  1 -
+ keystone/oauth1/core.py                       |  1 -
+ keystone/oauth1/validator.py                  |  1 -
+ keystone/oauth2/handlers.py                   |  1 +
+ keystone/policy/backends/base.py              |  1 -
+ keystone/policy/backends/rules.py             |  1 -
+ keystone/policy/core.py                       |  1 -
+ keystone/receipt/__init__.py                  |  1 -
+ keystone/receipt/handlers.py                  |  4 +-
+ keystone/receipt/provider.py                  |  1 -
+ keystone/receipt/providers/fernet/__init__.py |  1 -
+ keystone/receipt/providers/fernet/core.py     |  2 -
+ keystone/receipt/receipt_formatters.py        |  1 -
+ keystone/resource/backends/base.py            |  1 -
+ .../resource/backends/resource_options.py     |  1 -
+ keystone/resource/backends/sql.py             |  1 -
+ keystone/revoke/backends/base.py              |  1 -
+ keystone/revoke/backends/sql.py               |  3 +-
+ keystone/revoke/core.py                       |  1 -
+ keystone/server/__init__.py                   |  1 -
+ keystone/server/flask/common.py               |  2 -
+ .../middleware/auth_context.py                |  1 -
+ .../flask/request_processing/req_logging.py   |  1 -
+ .../tests/functional/shared/test_running.py   |  1 -
+ keystone/tests/hacking/checks.py              |  3 +-
+ .../tests/protection/v3/test_access_rules.py  |  3 +-
+ .../v3/test_application_credential.py         |  2 +-
+ keystone/tests/protection/v3/test_consumer.py |  3 +-
+ .../tests/protection/v3/test_credentials.py   |  2 +-
+ .../tests/protection/v3/test_domain_config.py |  3 +-
+ .../tests/protection/v3/test_domain_roles.py  |  3 +-
+ keystone/tests/protection/v3/test_domains.py  |  2 +-
+ .../protection/v3/test_ec2_credential.py      |  1 +
+ .../protection/v3/test_endpoint_group.py      |  3 +-
+ .../tests/protection/v3/test_endpoints.py     |  3 +-
+ keystone/tests/protection/v3/test_grants.py   |  2 +-
+ keystone/tests/protection/v3/test_groups.py   |  2 +-
+ .../protection/v3/test_identity_providers.py  |  3 +-
+ keystone/tests/protection/v3/test_limits.py   |  3 +-
+ keystone/tests/protection/v3/test_mappings.py |  3 +-
+ keystone/tests/protection/v3/test_policy.py   |  3 +-
+ .../protection/v3/test_policy_association.py  |  3 +-
+ .../protection/v3/test_project_endpoint.py    |  2 +-
+ .../tests/protection/v3/test_project_tags.py  |  2 +-
+ keystone/tests/protection/v3/test_projects.py |  2 +-
+ .../tests/protection/v3/test_protocols.py     |  3 +-
+ keystone/tests/protection/v3/test_regions.py  |  3 +-
+ .../protection/v3/test_registered_limits.py   |  3 +-
+ keystone/tests/protection/v3/test_roles.py    |  3 +-
+ .../protection/v3/test_service_providers.py   |  3 +-
+ keystone/tests/protection/v3/test_services.py |  3 +-
+ .../protection/v3/test_system_assignments.py  |  2 +-
+ keystone/tests/protection/v3/test_tokens.py   |  3 +-
+ keystone/tests/protection/v3/test_trusts.py   |  2 +-
+ keystone/tests/protection/v3/test_users.py    |  2 +-
+ .../backends/test_sql.py                      |  1 -
+ .../application_credential/test_backends.py   |  1 -
+ .../tests/unit/assignment/test_backends.py    |  1 -
+ .../tests/unit/auth/plugins/test_mapped.py    |  3 +-
+ keystone/tests/unit/backend/core_ldap.py      |  2 -
+ .../tests/unit/common/sql/test_upgrades.py    |  9 +--
+ keystone/tests/unit/common/test_cache.py      |  1 -
+ .../unit/common/test_database_conflicts.py    |  1 -
+ .../tests/unit/common/test_notifications.py   |  3 +-
+ .../tests/unit/common/test_rbac_enforcer.py   |  1 -
+ keystone/tests/unit/common/test_sql_core.py   |  1 -
+ keystone/tests/unit/common/test_utils.py      |  2 +-
+ .../unit/contrib/federation/test_utils.py     |  3 +-
+ keystone/tests/unit/core.py                   |  4 +-
+ .../tests/unit/credential/test_backend_sql.py |  5 +-
+ .../unit/credential/test_fernet_provider.py   |  2 +-
+ keystone/tests/unit/filtering.py              |  1 -
+ .../identity/backends/test_ldap_common.py     |  1 -
+ .../identity/shadow_users/test_backend.py     |  1 -
+ .../tests/unit/identity/test_backend_sql.py   |  1 -
+ keystone/tests/unit/identity/test_backends.py |  1 -
+ keystone/tests/unit/identity/test_core.py     |  2 +-
+ keystone/tests/unit/ksfixtures/__init__.py    |  5 +-
+ keystone/tests/unit/ksfixtures/cache.py       |  1 -
+ keystone/tests/unit/ksfixtures/database.py    |  1 -
+ .../unit/receipt/test_fernet_provider.py      |  1 -
+ keystone/tests/unit/resource/test_backends.py |  1 -
+ keystone/tests/unit/resource/test_core.py     |  1 -
+ keystone/tests/unit/rest.py                   |  1 +
+ .../tests/unit/server/test_keystone_flask.py  |  2 -
+ ...st_associate_project_endpoint_extension.py |  2 +-
+ keystone/tests/unit/test_auth_plugin.py       |  1 -
+ keystone/tests/unit/test_backend_ldap.py      |  3 +-
+ keystone/tests/unit/test_backend_ldap_pool.py |  1 -
+ keystone/tests/unit/test_backend_sql.py       |  1 -
+ keystone/tests/unit/test_backend_templated.py |  1 -
+ keystone/tests/unit/test_cli.py               |  7 +-
+ keystone/tests/unit/test_config.py            |  1 -
+ keystone/tests/unit/test_contrib_ec2_core.py  |  3 +-
+ keystone/tests/unit/test_contrib_s3_core.py   |  3 +-
+ keystone/tests/unit/test_exception.py         |  1 -
+ keystone/tests/unit/test_ldap_livetest.py     |  1 -
+ .../tests/unit/test_ldap_pool_livetest.py     |  1 -
+ keystone/tests/unit/test_ldap_tls_livetest.py |  1 -
+ keystone/tests/unit/test_middleware.py        |  2 -
+ keystone/tests/unit/test_policy.py            |  1 -
+ keystone/tests/unit/test_receipt_provider.py  |  3 +-
+ keystone/tests/unit/test_revoke.py            |  1 -
+ .../tests/unit/test_sql_banned_operations.py  |  9 +--
+ keystone/tests/unit/test_token_provider.py    |  3 +-
+ keystone/tests/unit/test_v3.py                |  4 +-
+ .../unit/test_v3_application_credential.py    |  3 +-
+ keystone/tests/unit/test_v3_assignment.py     |  2 +-
+ keystone/tests/unit/test_v3_auth.py           |  5 +-
+ keystone/tests/unit/test_v3_catalog.py        |  2 +-
+ keystone/tests/unit/test_v3_credential.py     |  5 +-
+ keystone/tests/unit/test_v3_domain_config.py  |  4 +-
+ .../tests/unit/test_v3_endpoint_policy.py     |  1 +
+ keystone/tests/unit/test_v3_federation.py     |  7 +-
+ keystone/tests/unit/test_v3_filters.py        |  3 +-
+ keystone/tests/unit/test_v3_identity.py       |  3 +-
+ keystone/tests/unit/test_v3_oauth1.py         |  7 +-
+ keystone/tests/unit/test_v3_oauth2.py         |  9 ++-
+ keystone/tests/unit/test_v3_os_revoke.py      |  2 +-
+ keystone/tests/unit/test_v3_policy.py         |  3 +-
+ keystone/tests/unit/test_v3_resource.py       |  3 +-
+ keystone/tests/unit/test_v3_trust.py          |  1 +
+ keystone/tests/unit/test_versions.py          |  3 +-
+ keystone/tests/unit/tests/test_core.py        |  1 -
+ .../tests/unit/token/test_fernet_provider.py  |  1 -
+ keystone/token/provider.py                    |  1 -
+ keystone/token/providers/fernet/core.py       |  2 -
+ keystone/token/token_formatters.py            |  1 -
+ keystone/trust/backends/sql.py                |  2 -
+ keystone/trust/core.py                        |  1 -
+ tox.ini                                       |  4 +-
+ 263 files changed, 234 insertions(+), 357 deletions(-)
+ create mode 100644 keystone/common/sql/migrations/versions/bobcat/contract/c88cdce8f248_remove_duplicate_constraints.py
+
+diff --git a/keystone/api/_shared/authentication.py b/keystone/api/_shared/authentication.py
+index ac613d655..6d58df207 100644
+--- a/keystone/api/_shared/authentication.py
++++ b/keystone/api/_shared/authentication.py
+@@ -27,7 +27,6 @@ from keystone.federation import constants
+ from keystone.i18n import _
+ from keystone.receipt import handlers as receipt_handlers
+ 
+-
+ LOG = log.getLogger(__name__)
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/api/_shared/implied_roles.py b/keystone/api/_shared/implied_roles.py
+index 9397d7278..2b8f26164 100644
+--- a/keystone/api/_shared/implied_roles.py
++++ b/keystone/api/_shared/implied_roles.py
+@@ -18,7 +18,6 @@
+ from keystone.common import provider_api
+ from keystone.server import flask as ks_flask
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+ 
+diff --git a/keystone/api/_shared/saml.py b/keystone/api/_shared/saml.py
+index a9db40873..8e95bc354 100644
+--- a/keystone/api/_shared/saml.py
++++ b/keystone/api/_shared/saml.py
+@@ -19,7 +19,6 @@ from keystone.federation import idp as keystone_idp
+ from keystone.federation import utils as federation_utils
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/api/auth.py b/keystone/api/auth.py
+index 5f582f2e0..abaaf2623 100644
+--- a/keystone/api/auth.py
++++ b/keystone/api/auth.py
+@@ -10,16 +10,17 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
++
+ # This file handles all flask-restful resources for /v3/auth
+-import string
++import string  # noqa: I202
++import urllib
+ 
+ import flask
+ import flask_restful
+-import http.client
+ from oslo_log import log
+ from oslo_serialization import jsonutils
+ from oslo_utils import strutils
+-import urllib
+ import werkzeug.exceptions
+ 
+ from keystone.api._shared import authentication
+@@ -40,7 +41,6 @@ from keystone.federation import utils as federation_utils
+ from keystone.i18n import _
+ from keystone.server import flask as ks_flask
+ 
+-
+ CONF = keystone.conf.CONF
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ LOG = log.getLogger(__name__)
+diff --git a/keystone/api/credentials.py b/keystone/api/credentials.py
+index 20f287c04..46e7790df 100644
+--- a/keystone/api/credentials.py
++++ b/keystone/api/credentials.py
+@@ -13,9 +13,9 @@
+ # This file handles all flask-restful resources for /v3/credentials
+ 
+ import hashlib
++import http.client
+ 
+ import flask
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common import provider_api
+diff --git a/keystone/api/discovery.py b/keystone/api/discovery.py
+index 615f36bd0..4d3f5728e 100644
+--- a/keystone/api/discovery.py
++++ b/keystone/api/discovery.py
+@@ -10,16 +10,16 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
++
+ import flask
+ from flask import request
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common import json_home
+ import keystone.conf
+ from keystone.server import flask as ks_flask
+ 
+-
+ CONF = keystone.conf.CONF
+ MEDIA_TYPE_JSON = 'application/vnd.openstack.identity-%s+json'
+ _DISCOVERY_BLUEPRINT = flask.Blueprint('Discovery', __name__)
+diff --git a/keystone/api/domains.py b/keystone/api/domains.py
+index 566676ac3..d12fb87a5 100644
+--- a/keystone/api/domains.py
++++ b/keystone/api/domains.py
+@@ -12,11 +12,12 @@
+ 
+ # This file handles all flask-restful resources for /v3/domains
+ 
+-import flask
+-import flask_restful
+ import functools
+ import http.client
+ 
++import flask
++import flask_restful
++
+ from keystone.common import json_home
+ from keystone.common import provider_api
+ from keystone.common import rbac_enforcer
+diff --git a/keystone/api/ec2tokens.py b/keystone/api/ec2tokens.py
+index 59b9e4cdc..4fad969df 100644
+--- a/keystone/api/ec2tokens.py
++++ b/keystone/api/ec2tokens.py
+@@ -12,10 +12,10 @@
+ 
+ # This file handles all flask-restful resources for /v3/ec2tokens
+ 
++import http.client
+ import urllib.parse
+ 
+ import flask
+-import http.client
+ from keystoneclient.contrib.ec2 import utils as ec2_utils
+ from oslo_serialization import jsonutils
+ 
+@@ -28,7 +28,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone.server import flask as ks_flask
+ 
+-
+ CRED_TYPE_EC2 = 'ec2'
+ 
+ 
+diff --git a/keystone/api/endpoints.py b/keystone/api/endpoints.py
+index 87d89d763..b365fb7b2 100644
+--- a/keystone/api/endpoints.py
++++ b/keystone/api/endpoints.py
+@@ -12,9 +12,10 @@
+ 
+ # This file handles all flask-restful resources for /v3/services
+ 
+-import flask_restful
+ import http.client
+ 
++import flask_restful
++
+ from keystone.api._shared import json_home_relations
+ from keystone.catalog import schema
+ from keystone.common import json_home
+@@ -26,7 +27,6 @@ from keystone import exception
+ from keystone import notifications
+ from keystone.server import flask as ks_flask
+ 
+-
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/api/groups.py b/keystone/api/groups.py
+index b80091f9e..d56ac22ae 100644
+--- a/keystone/api/groups.py
++++ b/keystone/api/groups.py
+@@ -12,11 +12,12 @@
+ 
+ # This file handles all flask-restful resources for /v3/groups
+ 
+-import flask
+-import flask_restful
+ import functools
+ import http.client
+ 
++import flask
++import flask_restful
++
+ from keystone.common import json_home
+ from keystone.common import provider_api
+ from keystone.common import rbac_enforcer
+@@ -27,7 +28,6 @@ from keystone.identity import schema
+ from keystone import notifications
+ from keystone.server import flask as ks_flask
+ 
+-
+ CONF = keystone.conf.CONF
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/api/limits.py b/keystone/api/limits.py
+index 99653d680..a4b54f20b 100644
+--- a/keystone/api/limits.py
++++ b/keystone/api/limits.py
+@@ -12,9 +12,10 @@
+ 
+ # This file handles all flask-restful resources for /v3/limits
+ 
++import http.client
++
+ import flask
+ import flask_restful
+-import http.client
+ 
+ from keystone.common import json_home
+ from keystone.common import provider_api
+@@ -24,7 +25,6 @@ from keystone import exception
+ from keystone.limit import schema
+ from keystone.server import flask as ks_flask
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ 
+diff --git a/keystone/api/os_ep_filter.py b/keystone/api/os_ep_filter.py
+index 1e4f3ee9d..8ab7acbac 100644
+--- a/keystone/api/os_ep_filter.py
++++ b/keystone/api/os_ep_filter.py
+@@ -12,9 +12,10 @@
+ 
+ # This file handles all flask-restful resources for /OS-EP-FILTER
+ 
+-import flask_restful
+ import http.client
+ 
++import flask_restful
++
+ from keystone.api._shared import json_home_relations
+ from keystone.api import endpoints as _endpoints_api
+ from keystone.catalog import schema
+@@ -26,7 +27,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone.server import flask as ks_flask
+ 
+-
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/api/os_federation.py b/keystone/api/os_federation.py
+index 83caf1f41..1634fe8b8 100644
+--- a/keystone/api/os_federation.py
++++ b/keystone/api/os_federation.py
+@@ -12,6 +12,8 @@
+ 
+ # This file handles all flask-restful resources for /v3/OS-FEDERATION
+ 
++import http.client
++
+ import flask
+ import flask_restful
+ import http.client
+diff --git a/keystone/api/os_inherit.py b/keystone/api/os_inherit.py
+index a0ff948d6..7249aa61a 100644
+--- a/keystone/api/os_inherit.py
++++ b/keystone/api/os_inherit.py
+@@ -12,9 +12,10 @@
+ 
+ # This file handles all flask-restful resources for /v3/OS-INHERIT
+ 
+-import flask_restful
+ import functools
+ import http.client
++
++import flask_restful
+ from oslo_log import log
+ 
+ from keystone.api._shared import json_home_relations
+@@ -24,7 +25,6 @@ from keystone.common import rbac_enforcer
+ from keystone import exception
+ from keystone.server import flask as ks_flask
+ 
+-
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+ LOG = log.getLogger(__name__)
+diff --git a/keystone/api/os_oauth1.py b/keystone/api/os_oauth1.py
+index 0afb669c2..a9cd52492 100644
+--- a/keystone/api/os_oauth1.py
++++ b/keystone/api/os_oauth1.py
+@@ -12,12 +12,13 @@
+ 
+ # This file handles all flask-restful resources for /v3/OS-OAUTH1/
+ 
++import http.client
++from urllib import parse as urlparse
++
+ import flask
+ import flask_restful
+-import http.client
+ from oslo_log import log
+ from oslo_utils import timeutils
+-from urllib import parse as urlparse
+ from werkzeug import exceptions
+ 
+ from keystone.api._shared import json_home_relations
+@@ -35,7 +36,6 @@ from keystone.oauth1 import schema
+ from keystone.oauth1 import validator
+ from keystone.server import flask as ks_flask
+ 
+-
+ LOG = log.getLogger(__name__)
+ PROVIDERS = provider_api.ProviderAPIs
+ ENFORCER = rbac_enforcer.RBACEnforcer
+diff --git a/keystone/api/os_oauth2.py b/keystone/api/os_oauth2.py
+index 45b7cb055..50101c05a 100644
+--- a/keystone/api/os_oauth2.py
++++ b/keystone/api/os_oauth2.py
+@@ -12,9 +12,10 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
++
+ import flask
+ from flask import make_response
+-import http.client
+ from oslo_log import log
+ from oslo_serialization import jsonutils
+ 
+diff --git a/keystone/api/os_revoke.py b/keystone/api/os_revoke.py
+index 681171097..1187ed44c 100644
+--- a/keystone/api/os_revoke.py
++++ b/keystone/api/os_revoke.py
+@@ -23,7 +23,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone.server import flask as ks_flask
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ 
+diff --git a/keystone/api/os_simple_cert.py b/keystone/api/os_simple_cert.py
+index b5bea8494..27e40352e 100644
+--- a/keystone/api/os_simple_cert.py
++++ b/keystone/api/os_simple_cert.py
+@@ -20,7 +20,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone.server import flask as ks_flask
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/api/policy.py b/keystone/api/policy.py
+index e68deefe0..aaec219ff 100644
+--- a/keystone/api/policy.py
++++ b/keystone/api/policy.py
+@@ -12,8 +12,9 @@
+ 
+ # This file handles all flask-restful resources for /policy
+ 
+-import flask_restful
+ import http.client
++
++import flask_restful
+ from oslo_log import versionutils
+ 
+ from keystone.api._shared import json_home_relations
+diff --git a/keystone/api/projects.py b/keystone/api/projects.py
+index 99576c9ac..cd5d73cbc 100644
+--- a/keystone/api/projects.py
++++ b/keystone/api/projects.py
+@@ -13,9 +13,9 @@
+ # This file handles all flask-restful resources for /v3/projects
+ 
+ import functools
++import http.client
+ 
+ import flask
+-import http.client
+ 
+ from keystone.common import json_home
+ from keystone.common import provider_api
+diff --git a/keystone/api/regions.py b/keystone/api/regions.py
+index 7e162dd01..b0f0085c7 100644
+--- a/keystone/api/regions.py
++++ b/keystone/api/regions.py
+@@ -22,7 +22,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone.server import flask as ks_flask
+ 
+-
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/api/registered_limits.py b/keystone/api/registered_limits.py
+index b3ad8c78c..ad1ecfd79 100644
+--- a/keystone/api/registered_limits.py
++++ b/keystone/api/registered_limits.py
+@@ -12,9 +12,10 @@
+ 
+ # This file handles all flask-restful resources for /v3/registered_limits
+ 
+-import flask
+ import http.client
+ 
++import flask
++
+ from keystone.common import json_home
+ from keystone.common import provider_api
+ from keystone.common import rbac_enforcer
+@@ -22,7 +23,6 @@ from keystone.common import validation
+ from keystone.limit import schema
+ from keystone.server import flask as ks_flask
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ 
+diff --git a/keystone/api/role_assignments.py b/keystone/api/role_assignments.py
+index adfba1efa..0725e07de 100644
+--- a/keystone/api/role_assignments.py
++++ b/keystone/api/role_assignments.py
+@@ -20,7 +20,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone.server import flask as ks_flask
+ 
+-
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/api/role_inferences.py b/keystone/api/role_inferences.py
+index b57a5f488..5412e3f8d 100644
+--- a/keystone/api/role_inferences.py
++++ b/keystone/api/role_inferences.py
+@@ -19,7 +19,6 @@ from keystone.common import provider_api
+ from keystone.common import rbac_enforcer
+ from keystone.server import flask as ks_flask
+ 
+-
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/api/roles.py b/keystone/api/roles.py
+index 3f9be4606..7f8d8925f 100644
+--- a/keystone/api/roles.py
++++ b/keystone/api/roles.py
+@@ -12,9 +12,10 @@
+ 
+ # This file handles all flask-restful resources for /v3/roles
+ 
++import http.client
++
+ import flask
+ import flask_restful
+-import http.client
+ 
+ from keystone.api._shared import implied_roles as shared
+ from keystone.assignment import schema
+@@ -25,7 +26,6 @@ from keystone.common import validation
+ import keystone.conf
+ from keystone.server import flask as ks_flask
+ 
+-
+ CONF = keystone.conf.CONF
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/api/s3tokens.py b/keystone/api/s3tokens.py
+index d58272f2c..769a378f2 100644
+--- a/keystone/api/s3tokens.py
++++ b/keystone/api/s3tokens.py
+@@ -15,9 +15,9 @@
+ import base64
+ import hashlib
+ import hmac
++import http.client
+ 
+ import flask
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.api._shared import EC2_S3_Resource
+diff --git a/keystone/api/services.py b/keystone/api/services.py
+index 4d223918b..99b0e7cbf 100644
+--- a/keystone/api/services.py
++++ b/keystone/api/services.py
+@@ -20,7 +20,6 @@ from keystone.common import rbac_enforcer
+ from keystone.common import validation
+ from keystone.server import flask as ks_flask
+ 
+-
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/api/system.py b/keystone/api/system.py
+index 2263a7ac2..4042cb312 100644
+--- a/keystone/api/system.py
++++ b/keystone/api/system.py
+@@ -12,18 +12,18 @@
+ 
+ # This file handles all flask-restful resources for /v3/system
+ 
+-import flask
+-import flask_restful
+ import functools
+ import http.client
+ 
++import flask
++import flask_restful
++
+ from keystone.common import json_home
+ from keystone.common import provider_api
+ from keystone.common import rbac_enforcer
+ from keystone import exception
+ from keystone.server import flask as ks_flask
+ 
+-
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/api/trusts.py b/keystone/api/trusts.py
+index 85e611299..52c931bc9 100644
+--- a/keystone/api/trusts.py
++++ b/keystone/api/trusts.py
+@@ -15,9 +15,10 @@
+ # TODO(morgan): Deprecate /v3/OS-TRUST/trusts path in favour of /v3/trusts.
+ # /v3/OS-TRUST should remain indefinitely.
+ 
++import http.client
++
+ import flask
+ import flask_restful
+-import http.client
+ from oslo_log import log
+ from oslo_policy import _checks as op_checks
+ 
+@@ -34,7 +35,6 @@ from keystone.i18n import _
+ from keystone.server import flask as ks_flask
+ from keystone.trust import schema
+ 
+-
+ LOG = log.getLogger(__name__)
+ ENFORCER = rbac_enforcer.RBACEnforcer
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/api/users.py b/keystone/api/users.py
+index a490d8915..58568e262 100644
+--- a/keystone/api/users.py
++++ b/keystone/api/users.py
+@@ -13,11 +13,11 @@
+ # This file handles all flask-restful resources for /v3/users
+ 
+ import base64
++import http.client
+ import secrets
+ import uuid
+ 
+ import flask
+-import http.client
+ from oslo_serialization import jsonutils
+ from werkzeug import exceptions
+ 
+@@ -35,7 +35,6 @@ from keystone.identity import schema
+ from keystone import notifications
+ from keystone.server import flask as ks_flask
+ 
+-
+ CRED_TYPE_EC2 = 'ec2'
+ CONF = keystone.conf.CONF
+ ENFORCER = rbac_enforcer.RBACEnforcer
+diff --git a/keystone/application_credential/core.py b/keystone/application_credential/core.py
+index 7faad548c..e4725afbd 100644
+--- a/keystone/application_credential/core.py
++++ b/keystone/application_credential/core.py
+@@ -22,7 +22,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ MEMOIZE = cache.get_memoization_decorator(group='application_credential')
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/assignment/backends/base.py b/keystone/assignment/backends/base.py
+index 195e856b5..664053731 100644
+--- a/keystone/assignment/backends/base.py
++++ b/keystone/assignment/backends/base.py
+@@ -17,7 +17,6 @@ import abc
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/assignment/core.py b/keystone/assignment/core.py
+index 6fa3f9b29..f5e005976 100644
+--- a/keystone/assignment/core.py
++++ b/keystone/assignment/core.py
+@@ -29,7 +29,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/assignment/role_backends/base.py b/keystone/assignment/role_backends/base.py
+index d91608477..26dc0f1cf 100644
+--- a/keystone/assignment/role_backends/base.py
++++ b/keystone/assignment/role_backends/base.py
+@@ -17,7 +17,6 @@ import abc
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ # NOTE(henry-nash): From the manager and above perspective, the domain_id
+ # attribute of a role is nullable.  However, to ensure uniqueness in
+ # multi-process configurations, it is better to still use a sql uniqueness
+diff --git a/keystone/assignment/role_backends/resource_options.py b/keystone/assignment/role_backends/resource_options.py
+index 52ca4ba18..0b022942b 100644
+--- a/keystone/assignment/role_backends/resource_options.py
++++ b/keystone/assignment/role_backends/resource_options.py
+@@ -13,7 +13,6 @@
+ from keystone.common import resource_options
+ from keystone.common.resource_options import options as ro_opt
+ 
+-
+ ROLE_OPTIONS_REGISTRY = resource_options.ResourceOptionRegistry('ROLE')
+ 
+ 
+diff --git a/keystone/auth/core.py b/keystone/auth/core.py
+index 4b499ebb8..d6538a0af 100644
+--- a/keystone/auth/core.py
++++ b/keystone/auth/core.py
+@@ -23,7 +23,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone.identity.backends import resource_options as ro
+ 
+-
+ LOG = log.getLogger(__name__)
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/auth/plugins/application_credential.py b/keystone/auth/plugins/application_credential.py
+index 4682a39dd..ad4921780 100644
+--- a/keystone/auth/plugins/application_credential.py
++++ b/keystone/auth/plugins/application_credential.py
+@@ -17,7 +17,6 @@ from keystone.auth.plugins import base
+ from keystone.common import provider_api
+ from keystone import exception
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ METHOD_NAME = 'application_credential'
+ 
+diff --git a/keystone/auth/plugins/base.py b/keystone/auth/plugins/base.py
+index d8015a5f1..0d8d2bb96 100644
+--- a/keystone/auth/plugins/base.py
++++ b/keystone/auth/plugins/base.py
+@@ -18,7 +18,6 @@ import collections
+ from keystone.common import provider_api
+ from keystone import exception
+ 
+-
+ AuthHandlerResponse = collections.namedtuple(
+     'AuthHandlerResponse', 'status, response_body, response_data'
+ )
+diff --git a/keystone/auth/plugins/core.py b/keystone/auth/plugins/core.py
+index 6704b7a07..92e84e7bf 100644
+--- a/keystone/auth/plugins/core.py
++++ b/keystone/auth/plugins/core.py
+@@ -23,7 +23,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/auth/plugins/external.py b/keystone/auth/plugins/external.py
+index c4deec986..fd569d8f4 100644
+--- a/keystone/auth/plugins/external.py
++++ b/keystone/auth/plugins/external.py
+@@ -24,7 +24,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/auth/plugins/mapped.py b/keystone/auth/plugins/mapped.py
+index d5fd65169..6321c20b1 100644
+--- a/keystone/auth/plugins/mapped.py
++++ b/keystone/auth/plugins/mapped.py
+@@ -11,12 +11,12 @@
+ # under the License.
+ 
+ import functools
++from urllib import parse
+ import uuid
+ 
+ import flask
+ from oslo_log import log
+ from pycadf import cadftaxonomy as taxonomy
+-from urllib import parse
+ 
+ from keystone.auth import plugins as auth_plugins
+ from keystone.auth.plugins import base
+diff --git a/keystone/auth/plugins/oauth1.py b/keystone/auth/plugins/oauth1.py
+index c3c8a8981..69d344837 100644
+--- a/keystone/auth/plugins/oauth1.py
++++ b/keystone/auth/plugins/oauth1.py
+@@ -23,7 +23,6 @@ from keystone.oauth1 import core as oauth
+ from keystone.oauth1 import validator
+ from keystone.server import flask as ks_flask
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+ 
+diff --git a/keystone/auth/plugins/password.py b/keystone/auth/plugins/password.py
+index be2637310..394bdb19e 100644
+--- a/keystone/auth/plugins/password.py
++++ b/keystone/auth/plugins/password.py
+@@ -18,7 +18,6 @@ from keystone.common import provider_api
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ METHOD_NAME = 'password'
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/auth/plugins/token.py b/keystone/auth/plugins/token.py
+index 347743e8c..560be75b3 100644
+--- a/keystone/auth/plugins/token.py
++++ b/keystone/auth/plugins/token.py
+@@ -22,7 +22,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ CONF = keystone.conf.CONF
+diff --git a/keystone/auth/plugins/totp.py b/keystone/auth/plugins/totp.py
+index be85ab747..15606b6a7 100644
+--- a/keystone/auth/plugins/totp.py
++++ b/keystone/auth/plugins/totp.py
+@@ -37,7 +37,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ METHOD_NAME = 'totp'
+diff --git a/keystone/auth/schema.py b/keystone/auth/schema.py
+index 1b748647c..17fe2be38 100644
+--- a/keystone/auth/schema.py
++++ b/keystone/auth/schema.py
+@@ -15,7 +15,6 @@ from keystone.common.validation import parameter_types
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ token_issue = {
+     'type': 'object',
+     'properties': {
+diff --git a/keystone/catalog/backends/base.py b/keystone/catalog/backends/base.py
+index e71d214fb..b3562c2ee 100644
+--- a/keystone/catalog/backends/base.py
++++ b/keystone/catalog/backends/base.py
+@@ -18,7 +18,6 @@ from keystone.common import provider_api
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/catalog/backends/sql.py b/keystone/catalog/backends/sql.py
+index f84d91e42..b8ce0371b 100644
+--- a/keystone/catalog/backends/sql.py
++++ b/keystone/catalog/backends/sql.py
+@@ -26,7 +26,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/catalog/backends/templated.py b/keystone/catalog/backends/templated.py
+index 747ff4605..a8b496d7d 100644
+--- a/keystone/catalog/backends/templated.py
++++ b/keystone/catalog/backends/templated.py
+@@ -22,7 +22,6 @@ from keystone.common import utils
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ CONF = keystone.conf.CONF
+diff --git a/keystone/catalog/core.py b/keystone/catalog/core.py
+index 8702f9493..a9d395607 100644
+--- a/keystone/catalog/core.py
++++ b/keystone/catalog/core.py
+@@ -24,7 +24,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/cmd/doctor/__init__.py b/keystone/cmd/doctor/__init__.py
+index 0f30f2d7b..11974aca0 100644
+--- a/keystone/cmd/doctor/__init__.py
++++ b/keystone/cmd/doctor/__init__.py
+@@ -22,7 +22,6 @@ from keystone.cmd.doctor import tokens_fernet
+ import keystone.conf
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ SYMPTOM_PREFIX = 'symptom_'
+diff --git a/keystone/cmd/doctor/caching.py b/keystone/cmd/doctor/caching.py
+index a5dcd7a91..eeb31c3ad 100644
+--- a/keystone/cmd/doctor/caching.py
++++ b/keystone/cmd/doctor/caching.py
+@@ -13,7 +13,6 @@
+ from keystone.common import cache
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/cmd/doctor/credential.py b/keystone/cmd/doctor/credential.py
+index 8cae322ac..195f51e4e 100644
+--- a/keystone/cmd/doctor/credential.py
++++ b/keystone/cmd/doctor/credential.py
+@@ -10,12 +10,10 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
+-import keystone.conf
+-
+ from keystone.common import fernet_utils as utils
++import keystone.conf
+ from keystone.credential.providers import fernet as credential_fernet
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/cmd/doctor/database.py b/keystone/cmd/doctor/database.py
+index 00a9035eb..7a39d3fac 100644
+--- a/keystone/cmd/doctor/database.py
++++ b/keystone/cmd/doctor/database.py
+@@ -12,7 +12,6 @@
+ 
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/cmd/doctor/debug.py b/keystone/cmd/doctor/debug.py
+index deb440009..a186adb26 100644
+--- a/keystone/cmd/doctor/debug.py
++++ b/keystone/cmd/doctor/debug.py
+@@ -12,7 +12,6 @@
+ 
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/cmd/doctor/federation.py b/keystone/cmd/doctor/federation.py
+index b58dcc211..6d5fff822 100644
+--- a/keystone/cmd/doctor/federation.py
++++ b/keystone/cmd/doctor/federation.py
+@@ -12,7 +12,6 @@
+ 
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/cmd/doctor/ldap.py b/keystone/cmd/doctor/ldap.py
+index 3091737f7..340636911 100644
+--- a/keystone/cmd/doctor/ldap.py
++++ b/keystone/cmd/doctor/ldap.py
+@@ -10,14 +10,12 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
++import configparser
+ import os
+ import re
+ 
+-import configparser
+-
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ CONFIG_REGEX = r'^keystone\..*?\.conf$'
+ 
+diff --git a/keystone/cmd/doctor/security_compliance.py b/keystone/cmd/doctor/security_compliance.py
+index c23af877c..be7c6ee84 100644
+--- a/keystone/cmd/doctor/security_compliance.py
++++ b/keystone/cmd/doctor/security_compliance.py
+@@ -14,7 +14,6 @@ import re
+ 
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/cmd/doctor/tokens.py b/keystone/cmd/doctor/tokens.py
+index a098653d0..547e13ec7 100644
+--- a/keystone/cmd/doctor/tokens.py
++++ b/keystone/cmd/doctor/tokens.py
+@@ -12,7 +12,6 @@
+ 
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/cmd/doctor/tokens_fernet.py b/keystone/cmd/doctor/tokens_fernet.py
+index ae27cfd6d..4b75f7067 100644
+--- a/keystone/cmd/doctor/tokens_fernet.py
++++ b/keystone/cmd/doctor/tokens_fernet.py
+@@ -10,10 +10,8 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
+-import keystone.conf
+-
+ from keystone.common import fernet_utils as utils
+-
++import keystone.conf
+ 
+ CONF = keystone.conf.CONF
+ 
+diff --git a/keystone/cmd/manage.py b/keystone/cmd/manage.py
+index c96305776..16161d4c5 100644
+--- a/keystone/cmd/manage.py
++++ b/keystone/cmd/manage.py
+@@ -19,7 +19,6 @@ import sys
+ 
+ from keystone.cmd import cli
+ 
+-
+ # If ../../keystone/__init__.py exists, add ../../ to Python search path, so
+ # that it will override what happens to be installed in
+ # /usr/(local/)lib/python...
+diff --git a/keystone/common/cache/_context_cache.py b/keystone/common/cache/_context_cache.py
+index e17464e87..5def5e05a 100644
+--- a/keystone/common/cache/_context_cache.py
++++ b/keystone/common/cache/_context_cache.py
+@@ -16,7 +16,6 @@ from dogpile.cache import proxy
+ from oslo_context import context as oslo_context
+ from oslo_serialization import msgpackutils
+ 
+-
+ # Register our new handler.
+ _registry = msgpackutils.default_registry
+ 
+diff --git a/keystone/common/cache/core.py b/keystone/common/cache/core.py
+index 5649c412d..6a968956b 100644
+--- a/keystone/common/cache/core.py
++++ b/keystone/common/cache/core.py
+@@ -23,7 +23,6 @@ from oslo_cache import core as cache
+ from keystone.common.cache import _context_cache
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/common/context.py b/keystone/common/context.py
+index 49be0945d..f42166ee0 100644
+--- a/keystone/common/context.py
++++ b/keystone/common/context.py
+@@ -12,7 +12,6 @@
+ 
+ from oslo_context import context as oslo_context
+ 
+-
+ REQUEST_CONTEXT_ENV = 'keystone.oslo_request_context'
+ 
+ 
+diff --git a/keystone/common/fernet_utils.py b/keystone/common/fernet_utils.py
+index cf454e16c..c312ff5e4 100644
+--- a/keystone/common/fernet_utils.py
++++ b/keystone/common/fernet_utils.py
+@@ -20,7 +20,6 @@ from oslo_log import log
+ from keystone.common import utils
+ import keystone.conf
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ CONF = keystone.conf.CONF
+diff --git a/keystone/common/manager.py b/keystone/common/manager.py
+index 108722630..60a8be574 100644
+--- a/keystone/common/manager.py
++++ b/keystone/common/manager.py
+@@ -23,7 +23,6 @@ import stevedore
+ from keystone.common import provider_api
+ from keystone.i18n import _
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ if hasattr(inspect, 'getfullargspec'):
+diff --git a/keystone/common/password_hashing.py b/keystone/common/password_hashing.py
+index 6cef5122f..9a8d54a2d 100644
+--- a/keystone/common/password_hashing.py
++++ b/keystone/common/password_hashing.py
+@@ -22,7 +22,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/common/profiler.py b/keystone/common/profiler.py
+index e1232ee5d..38f814d0c 100644
+--- a/keystone/common/profiler.py
++++ b/keystone/common/profiler.py
+@@ -15,7 +15,6 @@ import osprofiler.initializer
+ 
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/common/rbac_enforcer/enforcer.py b/keystone/common/rbac_enforcer/enforcer.py
+index 437d10d1a..e58515fc1 100644
+--- a/keystone/common/rbac_enforcer/enforcer.py
++++ b/keystone/common/rbac_enforcer/enforcer.py
+@@ -27,7 +27,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ PROVIDER_APIS = provider_api.ProviderAPIs
+diff --git a/keystone/common/rbac_enforcer/policy.py b/keystone/common/rbac_enforcer/policy.py
+index e91be020c..65a781444 100644
+--- a/keystone/common/rbac_enforcer/policy.py
++++ b/keystone/common/rbac_enforcer/policy.py
+@@ -16,7 +16,6 @@
+ from keystone.common.rbac_enforcer import enforcer
+ from keystone import conf
+ 
+-
+ CONF = conf.CONF
+ 
+ 
+diff --git a/keystone/common/render_token.py b/keystone/common/render_token.py
+index 0526e8d87..bef49b0fc 100644
+--- a/keystone/common/render_token.py
++++ b/keystone/common/render_token.py
+@@ -13,7 +13,6 @@
+ from keystone.common import provider_api
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/common/sql/core.py b/keystone/common/sql/core.py
+index 2431f6f45..dcbea7ee7 100644
+--- a/keystone/common/sql/core.py
++++ b/keystone/common/sql/core.py
+@@ -33,7 +33,8 @@ from osprofiler import opts as profiler
+ import osprofiler.sqlalchemy
+ import sqlalchemy as sql
+ from sqlalchemy.ext import declarative
+-from sqlalchemy.orm.attributes import flag_modified, InstrumentedAttribute
++from sqlalchemy.orm.attributes import flag_modified
++from sqlalchemy.orm.attributes import InstrumentedAttribute
+ from sqlalchemy import types as sql_types
+ 
+ from keystone.common import driver_hints
+@@ -42,7 +43,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/common/sql/migrations/versions/2024.01/expand/47147121_add_identity_federation_attribute_mapping_schema_version.py b/keystone/common/sql/migrations/versions/2024.01/expand/47147121_add_identity_federation_attribute_mapping_schema_version.py
+index 8c060e0d9..e05e2f44c 100644
+--- a/keystone/common/sql/migrations/versions/2024.01/expand/47147121_add_identity_federation_attribute_mapping_schema_version.py
++++ b/keystone/common/sql/migrations/versions/2024.01/expand/47147121_add_identity_federation_attribute_mapping_schema_version.py
+@@ -18,7 +18,6 @@ Create Date: 2023-12-12 09:00:00
+ """
+ 
+ from alembic import op
+-
+ from sqlalchemy import Column
+ from sqlalchemy import String
+ 
+diff --git a/keystone/common/sql/migrations/versions/bobcat/contract/c88cdce8f248_remove_duplicate_constraints.py b/keystone/common/sql/migrations/versions/bobcat/contract/c88cdce8f248_remove_duplicate_constraints.py
+new file mode 100644
+index 000000000..f7404354f
+--- /dev/null
++++ b/keystone/common/sql/migrations/versions/bobcat/contract/c88cdce8f248_remove_duplicate_constraints.py
+@@ -0,0 +1,79 @@
++# Licensed under the Apache License, Version 2.0 (the "License"); you may
++# not use this file except in compliance with the License. You may obtain
++# a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++# License for the specific language governing permissions and limitations
++# under the License.
++
++"""Remove duplicate constraints.
++
++Revision ID: c88cdce8f248
++Revises: 99de3849d860
++Create Date: 2023-03-15 13:17:44.060715
++"""
++
++from alembic import op
++from sqlalchemy.engine import reflection
++
++# revision identifiers, used by Alembic.
++revision = 'c88cdce8f248'
++down_revision = '99de3849d860'
++branch_labels = None
++depends_on = None
++
++
++def upgrade():
++    bind = op.get_bind()
++
++    # This only affects MySQL - PostgreSQL and SQLite were smart enough to
++    # ignore the duplicate constraints
++    if bind.engine.name != 'mysql':
++        return
++
++    # We want to drop a duplicate index on the 'project_tag' table. To drop an
++    # index, we would normally just use drop_index like so:
++    #
++    #   with op.batch_alter_table('project_tag', schema=None) as batch_op:
++    #       batch_op.drop_index(foo)
++    #
++    # However, the index wasn't explicitly named so we're not sure what 'foo'
++    # is. It has two potential names:
++    #
++    # - If it was created by alembic, alembic will have left things up to the
++    #   backend, which on MySQL means the index will have the same name as the
++    #   first column the index covers [1]. Alternatively, ...
++    # - If it was created by sqlalchemy-migrate then it will be called
++    #   '{table_name}_{first_column_name}_key' [2]
++    #
++    # We need to handle both, so we need to first inspect the table to find
++    # which it is.
++    #
++    # Note that unlike MariaDB [3], MySQL [4] doesn't support the 'ALTER TABLE
++    # tbl_name DROP CONSTRAINT IF EXISTS constraint_name' syntax, which would
++    # have allowed us to avoid the inspection. Boo.
++    #
++    # [1] https://dba.stackexchange.com/a/160712
++    # [2] https://opendev.org/x/sqlalchemy-migrate/src/commit/5d1f322542cd8eb42381612765be4ed9ca8105ec/migrate/changeset/constraint.py#L199  # noqa: E501
++    # [3] https://mariadb.com/kb/en/alter-table/
++    # [4] https://dev.mysql.com/doc/refman/8.0/en/alter-table.html
++
++    inspector = reflection.Inspector.from_engine(bind)
++    indexes = inspector.get_indexes('project_tag')
++
++    index_name = None
++    for index in indexes:
++        if index['column_names'] == ['project_id', 'name']:
++            index_name = index['name']
++            break
++    else:
++        # This should never happen *but* we silently ignore it since there's no
++        # need to break user's upgrade flow, even if they've borked something
++        return
++
++    with op.batch_alter_table('project_tag', schema=None) as batch_op:
++        batch_op.drop_index(index_name)
+diff --git a/keystone/common/tokenless_auth.py b/keystone/common/tokenless_auth.py
+index 671ad187a..a59c3c61e 100644
+--- a/keystone/common/tokenless_auth.py
++++ b/keystone/common/tokenless_auth.py
+@@ -25,7 +25,6 @@ from keystone.federation import constants as federation_constants
+ from keystone.federation import utils
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/common/utils.py b/keystone/common/utils.py
+index d25fc5cb9..24ff72541 100644
+--- a/keystone/common/utils.py
++++ b/keystone/common/utils.py
+@@ -23,6 +23,7 @@ import hashlib
+ import itertools
+ import os
+ import pwd
++import urllib
+ import uuid
+ 
+ from cryptography import x509
+@@ -31,15 +32,12 @@ from oslo_serialization import jsonutils
+ from oslo_utils import reflection
+ from oslo_utils import strutils
+ from oslo_utils import timeutils
+-import urllib
+-
+ 
+ from keystone.common import password_hashing
+ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ WHITELISTED_PROPERTIES = [
+diff --git a/keystone/common/validation/validators.py b/keystone/common/validation/validators.py
+index b8d7b2470..d49e194fc 100644
+--- a/keystone/common/validation/validators.py
++++ b/keystone/common/validation/validators.py
+@@ -20,7 +20,6 @@ from oslo_log import log
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = cfg.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/conf/application_credential.py b/keystone/conf/application_credential.py
+index a86caf5af..0e20234ac 100644
+--- a/keystone/conf/application_credential.py
++++ b/keystone/conf/application_credential.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/assignment.py b/keystone/conf/assignment.py
+index d981b840b..6b9ba8fdc 100644
+--- a/keystone/conf/assignment.py
++++ b/keystone/conf/assignment.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/auth.py b/keystone/conf/auth.py
+index 1515c92ec..0de24b97d 100644
+--- a/keystone/conf/auth.py
++++ b/keystone/conf/auth.py
+@@ -15,7 +15,6 @@ from oslo_config import cfg
+ from keystone.conf import constants
+ from keystone.conf import utils
+ 
+-
+ methods = cfg.ListOpt(
+     'methods',
+     default=constants._DEFAULT_AUTH_METHODS,
+diff --git a/keystone/conf/catalog.py b/keystone/conf/catalog.py
+index 6dadf5227..1ee6babe8 100644
+--- a/keystone/conf/catalog.py
++++ b/keystone/conf/catalog.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ template_file = cfg.StrOpt(
+     'template_file',
+     default='default_catalog.templates',
+diff --git a/keystone/conf/credential.py b/keystone/conf/credential.py
+index 1532b1882..de54f9935 100644
+--- a/keystone/conf/credential.py
++++ b/keystone/conf/credential.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/default.py b/keystone/conf/default.py
+index d95ae9d68..1598d9b00 100644
+--- a/keystone/conf/default.py
++++ b/keystone/conf/default.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ admin_token = cfg.StrOpt(
+     'admin_token',
+     secret=True,
+diff --git a/keystone/conf/domain_config.py b/keystone/conf/domain_config.py
+index 02fd4f2f1..39edec4a1 100644
+--- a/keystone/conf/domain_config.py
++++ b/keystone/conf/domain_config.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/endpoint_filter.py b/keystone/conf/endpoint_filter.py
+index 6c07affe2..836f2a7b6 100644
+--- a/keystone/conf/endpoint_filter.py
++++ b/keystone/conf/endpoint_filter.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/endpoint_policy.py b/keystone/conf/endpoint_policy.py
+index 43bc8e2f6..ad64fbe97 100644
+--- a/keystone/conf/endpoint_policy.py
++++ b/keystone/conf/endpoint_policy.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/federation.py b/keystone/conf/federation.py
+index acd56ff5d..2fbd9124e 100644
+--- a/keystone/conf/federation.py
++++ b/keystone/conf/federation.py
+@@ -15,7 +15,6 @@ from oslo_log import versionutils
+ 
+ from keystone.conf import utils
+ 
+-
+ _DEPRECATED_MSG = utils.fmt(
+     """
+ This option has been superseded by ephemeral users existing in the domain
+diff --git a/keystone/conf/fernet_receipts.py b/keystone/conf/fernet_receipts.py
+index 241dcac38..b6c3b746d 100644
+--- a/keystone/conf/fernet_receipts.py
++++ b/keystone/conf/fernet_receipts.py
+@@ -16,7 +16,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ key_repository = cfg.StrOpt(
+     'key_repository',
+     default='/etc/keystone/fernet-keys/',
+diff --git a/keystone/conf/fernet_tokens.py b/keystone/conf/fernet_tokens.py
+index e3ccc41ae..bfd166640 100644
+--- a/keystone/conf/fernet_tokens.py
++++ b/keystone/conf/fernet_tokens.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ key_repository = cfg.StrOpt(
+     'key_repository',
+     default='/etc/keystone/fernet-keys/',
+diff --git a/keystone/conf/identity.py b/keystone/conf/identity.py
+index 81e94af58..ada27e901 100644
+--- a/keystone/conf/identity.py
++++ b/keystone/conf/identity.py
+@@ -15,7 +15,6 @@ import passlib.utils
+ 
+ from keystone.conf import utils
+ 
+-
+ default_domain_id = cfg.StrOpt(
+     'default_domain_id',
+     default='default',
+diff --git a/keystone/conf/identity_mapping.py b/keystone/conf/identity_mapping.py
+index 3bae75a34..23e745a8f 100644
+--- a/keystone/conf/identity_mapping.py
++++ b/keystone/conf/identity_mapping.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/jwt_tokens.py b/keystone/conf/jwt_tokens.py
+index 10e84901a..231b35ed1 100644
+--- a/keystone/conf/jwt_tokens.py
++++ b/keystone/conf/jwt_tokens.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ jws_public_key_repository = cfg.StrOpt(
+     'jws_public_key_repository',
+     default='/etc/keystone/jws-keys/public',
+diff --git a/keystone/conf/ldap.py b/keystone/conf/ldap.py
+index 43d31fffa..d9e930cc7 100644
+--- a/keystone/conf/ldap.py
++++ b/keystone/conf/ldap.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ url = cfg.StrOpt(
+     'url',
+     default='ldap://localhost',
+diff --git a/keystone/conf/oauth1.py b/keystone/conf/oauth1.py
+index 9bec96db9..58b1f94ab 100644
+--- a/keystone/conf/oauth1.py
++++ b/keystone/conf/oauth1.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/opts.py b/keystone/conf/opts.py
+index 5ff4d4de1..f0bc8a3f5 100644
+--- a/keystone/conf/opts.py
++++ b/keystone/conf/opts.py
+@@ -33,7 +33,6 @@ import importlib
+ import os
+ import pkgutil
+ 
+-
+ LIST_OPTS_FUNC_NAME = 'list_opts'
+ IGNORED_MODULES = ('opts', 'constants', 'utils')
+ 
+diff --git a/keystone/conf/policy.py b/keystone/conf/policy.py
+index b1cfa98e1..39c7a9b91 100644
+--- a/keystone/conf/policy.py
++++ b/keystone/conf/policy.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/receipt.py b/keystone/conf/receipt.py
+index f295d174c..0d70195bc 100644
+--- a/keystone/conf/receipt.py
++++ b/keystone/conf/receipt.py
+@@ -16,7 +16,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ expiration = cfg.IntOpt(
+     'expiration',
+     default=300,
+diff --git a/keystone/conf/resource.py b/keystone/conf/resource.py
+index b2d1f91a6..659cd339a 100644
+--- a/keystone/conf/resource.py
++++ b/keystone/conf/resource.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/revoke.py b/keystone/conf/revoke.py
+index 6009d5f34..1e075379c 100644
+--- a/keystone/conf/revoke.py
++++ b/keystone/conf/revoke.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/role.py b/keystone/conf/role.py
+index ef728d66b..76ba38e23 100644
+--- a/keystone/conf/role.py
++++ b/keystone/conf/role.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ # The role driver has no default for backward compatibility reasons. If role
+ # driver is not specified, the assignment driver chooses the backend.
+ driver = cfg.StrOpt(
+diff --git a/keystone/conf/saml.py b/keystone/conf/saml.py
+index 1f92c3ba4..b987d1d32 100644
+--- a/keystone/conf/saml.py
++++ b/keystone/conf/saml.py
+@@ -15,7 +15,6 @@ from oslo_config import cfg
+ from keystone.conf import constants
+ from keystone.conf import utils
+ 
+-
+ assertion_expiration_time = cfg.IntOpt(
+     'assertion_expiration_time',
+     default=3600,
+diff --git a/keystone/conf/security_compliance.py b/keystone/conf/security_compliance.py
+index c3d16b21d..3d7112f37 100644
+--- a/keystone/conf/security_compliance.py
++++ b/keystone/conf/security_compliance.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ disable_user_account_days_inactive = cfg.IntOpt(
+     'disable_user_account_days_inactive',
+     min=1,
+diff --git a/keystone/conf/shadow_users.py b/keystone/conf/shadow_users.py
+index 5b27e38c6..b6953c467 100644
+--- a/keystone/conf/shadow_users.py
++++ b/keystone/conf/shadow_users.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/tokenless_auth.py b/keystone/conf/tokenless_auth.py
+index 4c7723b88..f334d8e60 100644
+--- a/keystone/conf/tokenless_auth.py
++++ b/keystone/conf/tokenless_auth.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ trusted_issuer = cfg.MultiStrOpt(
+     'trusted_issuer',
+     default=[],
+diff --git a/keystone/conf/trust.py b/keystone/conf/trust.py
+index ed00f9b6e..36646dadc 100644
+--- a/keystone/conf/trust.py
++++ b/keystone/conf/trust.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ allow_redelegation = cfg.BoolOpt(
+     'allow_redelegation',
+     default=False,
+diff --git a/keystone/conf/unified_limit.py b/keystone/conf/unified_limit.py
+index 6a662c482..ecf1587fd 100644
+--- a/keystone/conf/unified_limit.py
++++ b/keystone/conf/unified_limit.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ driver = cfg.StrOpt(
+     'driver',
+     default='sql',
+diff --git a/keystone/conf/wsgi.py b/keystone/conf/wsgi.py
+index 1c9f52b48..a8c5f67eb 100644
+--- a/keystone/conf/wsgi.py
++++ b/keystone/conf/wsgi.py
+@@ -14,7 +14,6 @@ from oslo_config import cfg
+ 
+ from keystone.conf import utils
+ 
+-
+ debug_middleware = cfg.BoolOpt(
+     'debug_middleware',
+     default=False,
+diff --git a/keystone/credential/backends/base.py b/keystone/credential/backends/base.py
+index c65694743..c13d306d4 100644
+--- a/keystone/credential/backends/base.py
++++ b/keystone/credential/backends/base.py
+@@ -18,7 +18,6 @@ from oslo_log import log
+ 
+ from keystone import exception
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ 
+diff --git a/keystone/credential/core.py b/keystone/credential/core.py
+index b64db7b83..13b90e379 100644
+--- a/keystone/credential/core.py
++++ b/keystone/credential/core.py
+@@ -24,7 +24,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ MEMOIZE = cache.get_memoization_decorator(group='credential')
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/credential/provider.py b/keystone/credential/provider.py
+index 74de12450..52ededcd1 100644
+--- a/keystone/credential/provider.py
++++ b/keystone/credential/provider.py
+@@ -13,7 +13,6 @@
+ from keystone.common import manager
+ import keystone.conf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/credential/providers/fernet/core.py b/keystone/credential/providers/fernet/core.py
+index 6b356ab2b..f2f35ae92 100644
+--- a/keystone/credential/providers/fernet/core.py
++++ b/keystone/credential/providers/fernet/core.py
+@@ -21,7 +21,6 @@ from keystone.credential.providers import core
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/endpoint_policy/core.py b/keystone/endpoint_policy/core.py
+index ecafeb284..fd879b974 100644
+--- a/keystone/endpoint_policy/core.py
++++ b/keystone/endpoint_policy/core.py
+@@ -20,7 +20,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/exception.py b/keystone/exception.py
+index af4f3d7aa..73db9e729 100644
+--- a/keystone/exception.py
++++ b/keystone/exception.py
+@@ -19,7 +19,6 @@ from oslo_utils import encodeutils
+ import keystone.conf
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/federation/idp.py b/keystone/federation/idp.py
+index 77a8a16f8..b849cb226 100644
+--- a/keystone/federation/idp.py
++++ b/keystone/federation/idp.py
+@@ -37,7 +37,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ LOG = log.getLogger(__name__)
+ CONF = keystone.conf.CONF
+ 
+diff --git a/keystone/federation/schema.py b/keystone/federation/schema.py
+index 41a738de2..48c92a677 100644
+--- a/keystone/federation/schema.py
++++ b/keystone/federation/schema.py
+@@ -13,7 +13,6 @@
+ from keystone.common import validation
+ from keystone.common.validation import parameter_types
+ 
+-
+ basic_property_id = {
+     'type': 'object',
+     'properties': {'id': {'type': 'string'}},
+diff --git a/keystone/federation/utils.py b/keystone/federation/utils.py
+index f997b1ed2..2383e5365 100644
+--- a/keystone/federation/utils.py
++++ b/keystone/federation/utils.py
+@@ -27,7 +27,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/i18n.py b/keystone/i18n.py
+index 76b891221..a0b53f565 100644
+--- a/keystone/i18n.py
++++ b/keystone/i18n.py
+@@ -20,7 +20,6 @@ See https://docs.openstack.org/oslo.i18n/latest/user/usage.html .
+ 
+ import oslo_i18n
+ 
+-
+ oslo_i18n.enable_lazy()
+ 
+ _translators = oslo_i18n.TranslatorFactory(domain='keystone')
+diff --git a/keystone/identity/backends/base.py b/keystone/identity/backends/base.py
+index 268141e57..d8b66d2bb 100644
+--- a/keystone/identity/backends/base.py
++++ b/keystone/identity/backends/base.py
+@@ -17,7 +17,6 @@ import abc
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/identity/backends/ldap/common.py b/keystone/identity/backends/ldap/common.py
+index 324fed42c..a16d04159 100644
+--- a/keystone/identity/backends/ldap/common.py
++++ b/keystone/identity/backends/ldap/common.py
+@@ -31,7 +31,6 @@ from keystone.common import driver_hints
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ LDAP_VALUES = {'TRUE': True, 'FALSE': False}
+diff --git a/keystone/identity/backends/ldap/core.py b/keystone/identity/backends/ldap/core.py
+index 5e60b726e..6c73d6483 100644
+--- a/keystone/identity/backends/ldap/core.py
++++ b/keystone/identity/backends/ldap/core.py
+@@ -24,7 +24,6 @@ from keystone.identity.backends import base
+ from keystone.identity.backends.ldap import common as common_ldap
+ from keystone.identity.backends.ldap import models
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/identity/backends/sql.py b/keystone/identity/backends/sql.py
+index 85ec3bb4c..f6ab56ffc 100644
+--- a/keystone/identity/backends/sql.py
++++ b/keystone/identity/backends/sql.py
+@@ -28,7 +28,6 @@ from keystone.identity.backends import base
+ from keystone.identity.backends import resource_options as options
+ from keystone.identity.backends import sql_model as model
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/identity/backends/sql_model.py b/keystone/identity/backends/sql_model.py
+index a443d6c53..f2e1ca422 100644
+--- a/keystone/identity/backends/sql_model.py
++++ b/keystone/identity/backends/sql_model.py
+@@ -14,6 +14,7 @@
+ 
+ import datetime
+ 
++from oslo_utils import timeutils
+ import sqlalchemy
+ from sqlalchemy.ext.hybrid import hybrid_property
+ from sqlalchemy import orm
+@@ -25,7 +26,6 @@ from keystone.common import sql
+ import keystone.conf
+ from keystone.identity.backends import resource_options as iro
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/identity/core.py b/keystone/identity/core.py
+index c945788e1..bd3c13685 100644
+--- a/keystone/identity/core.py
++++ b/keystone/identity/core.py
+@@ -24,6 +24,7 @@ import uuid
+ 
+ from oslo_config import cfg
+ from oslo_log import log
++from oslo_utils import timeutils
+ from pycadf import reason
+ 
+ from keystone import assignment  # TODO(lbragstad): Decouple this dependency
+@@ -37,8 +38,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone.identity.mapping_backends import mapping
+ from keystone import notifications
+-from oslo_utils import timeutils
+-
+ 
+ CONF = keystone.conf.CONF
+ 
+diff --git a/keystone/identity/generator.py b/keystone/identity/generator.py
+index f4f55a331..464cbf452 100644
+--- a/keystone/identity/generator.py
++++ b/keystone/identity/generator.py
+@@ -20,7 +20,6 @@ from keystone.common import manager
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/identity/id_generators/sha256.py b/keystone/identity/id_generators/sha256.py
+index dde9c2dd0..170c2616e 100644
+--- a/keystone/identity/id_generators/sha256.py
++++ b/keystone/identity/id_generators/sha256.py
+@@ -13,6 +13,7 @@
+ # under the License.
+ 
+ import hashlib
++
+ from keystone.identity import generator
+ 
+ 
+diff --git a/keystone/identity/schema.py b/keystone/identity/schema.py
+index 1c1d5f4b5..23bee9bcc 100644
+--- a/keystone/identity/schema.py
++++ b/keystone/identity/schema.py
+@@ -15,7 +15,6 @@ from keystone.common.validation import parameter_types
+ import keystone.conf
+ from keystone.identity.backends import resource_options as ro
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/identity/shadow_backends/sql.py b/keystone/identity/shadow_backends/sql.py
+index bb790891f..5b1f40821 100644
+--- a/keystone/identity/shadow_backends/sql.py
++++ b/keystone/identity/shadow_backends/sql.py
+@@ -24,7 +24,6 @@ from keystone.identity.backends import base as identity_base
+ from keystone.identity.backends import sql_model as model
+ from keystone.identity.shadow_backends import base
+ 
+-
+ CONF = cfg.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/limit/backends/base.py b/keystone/limit/backends/base.py
+index 397862f9b..4b7ea03c0 100644
+--- a/keystone/limit/backends/base.py
++++ b/keystone/limit/backends/base.py
+@@ -18,7 +18,6 @@ import abc
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/limit/backends/sql.py b/keystone/limit/backends/sql.py
+index 3062f891a..c384bd083 100644
+--- a/keystone/limit/backends/sql.py
++++ b/keystone/limit/backends/sql.py
+@@ -14,10 +14,10 @@
+ # under the License.
+ 
+ import copy
+-import sqlalchemy
+-from sqlalchemy.ext.hybrid import hybrid_property
+ 
+ from oslo_db import exception as db_exception
++import sqlalchemy
++from sqlalchemy.ext.hybrid import hybrid_property
+ 
+ from keystone.common import driver_hints
+ from keystone.common import sql
+diff --git a/keystone/models/revoke_model.py b/keystone/models/revoke_model.py
+index 422a0efda..19f84b15f 100644
+--- a/keystone/models/revoke_model.py
++++ b/keystone/models/revoke_model.py
+@@ -17,7 +17,6 @@ from oslo_utils import timeutils
+ from keystone.common import cache
+ from keystone.common import utils
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ # The set of attributes common between the RevokeEvent
+diff --git a/keystone/notifications.py b/keystone/notifications.py
+index f98e7a65a..821a2ab2c 100644
+--- a/keystone/notifications.py
++++ b/keystone/notifications.py
+@@ -39,7 +39,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ _CATALOG_HELPER_OBJ = None
+ 
+ LOG = log.getLogger(__name__)
+diff --git a/keystone/oauth1/backends/base.py b/keystone/oauth1/backends/base.py
+index 67c42df46..4d5149a12 100644
+--- a/keystone/oauth1/backends/base.py
++++ b/keystone/oauth1/backends/base.py
+@@ -17,7 +17,6 @@ import string
+ 
+ from keystone import exception
+ 
+-
+ # The characters used to generate verifiers are limited to alphanumerical
+ # values for ease of manual entry. Commonly confused characters are omitted.
+ VERIFIER_CHARS = string.ascii_letters + string.digits
+diff --git a/keystone/oauth1/backends/sql.py b/keystone/oauth1/backends/sql.py
+index 4904a3317..33f4a5b31 100644
+--- a/keystone/oauth1/backends/sql.py
++++ b/keystone/oauth1/backends/sql.py
+@@ -25,7 +25,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone.oauth1.backends import base
+ 
+-
+ random = _random.SystemRandom()
+ 
+ 
+diff --git a/keystone/oauth1/core.py b/keystone/oauth1/core.py
+index 8815946e3..e0ec7d169 100644
+--- a/keystone/oauth1/core.py
++++ b/keystone/oauth1/core.py
+@@ -26,7 +26,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone import notifications
+ 
+-
+ RequestValidator = oauth1.RequestValidator
+ Client = oauth1.Client
+ AccessTokenEndpoint = oauth1.AccessTokenEndpoint
+diff --git a/keystone/oauth1/validator.py b/keystone/oauth1/validator.py
+index 40bd6421b..6a7d36220 100644
+--- a/keystone/oauth1/validator.py
++++ b/keystone/oauth1/validator.py
+@@ -19,7 +19,6 @@ from keystone import exception
+ from keystone.oauth1.backends import base
+ from keystone.oauth1 import core as oauth1
+ 
+-
+ METHOD_NAME = 'oauth_validator'
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/oauth2/handlers.py b/keystone/oauth2/handlers.py
+index 25b679928..87d0b5273 100644
+--- a/keystone/oauth2/handlers.py
++++ b/keystone/oauth2/handlers.py
+@@ -13,6 +13,7 @@
+ # under the License.
+ 
+ import flask
++
+ from keystone.server import flask as ks_flask
+ 
+ 
+diff --git a/keystone/policy/backends/base.py b/keystone/policy/backends/base.py
+index c3da9fce2..8eac86973 100644
+--- a/keystone/policy/backends/base.py
++++ b/keystone/policy/backends/base.py
+@@ -15,7 +15,6 @@ import abc
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/policy/backends/rules.py b/keystone/policy/backends/rules.py
+index f9e1580e2..a98510273 100644
+--- a/keystone/policy/backends/rules.py
++++ b/keystone/policy/backends/rules.py
+@@ -21,7 +21,6 @@ from keystone.common.rbac_enforcer import policy
+ from keystone import exception
+ from keystone.policy.backends import base
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ 
+diff --git a/keystone/policy/core.py b/keystone/policy/core.py
+index 390da101f..5aee6a3d1 100644
+--- a/keystone/policy/core.py
++++ b/keystone/policy/core.py
+@@ -19,7 +19,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/receipt/__init__.py b/keystone/receipt/__init__.py
+index fe8c92207..bff04d3ab 100644
+--- a/keystone/receipt/__init__.py
++++ b/keystone/receipt/__init__.py
+@@ -14,5 +14,4 @@
+ 
+ from keystone.receipt import provider
+ 
+-
+ __all__ = ("provider",)
+diff --git a/keystone/receipt/handlers.py b/keystone/receipt/handlers.py
+index 736fb3dbc..ad30259c4 100644
+--- a/keystone/receipt/handlers.py
++++ b/keystone/receipt/handlers.py
+@@ -12,15 +12,15 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
+-import flask
+ import http.client
++
++import flask
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common import authorization
+ from keystone.common import provider_api
+ from keystone import exception
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+ 
+diff --git a/keystone/receipt/provider.py b/keystone/receipt/provider.py
+index 423bd46b8..78908fc51 100644
+--- a/keystone/receipt/provider.py
++++ b/keystone/receipt/provider.py
+@@ -29,7 +29,6 @@ from keystone.i18n import _
+ from keystone.models import receipt_model
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/receipt/providers/fernet/__init__.py b/keystone/receipt/providers/fernet/__init__.py
+index 970c94267..a58627fd7 100644
+--- a/keystone/receipt/providers/fernet/__init__.py
++++ b/keystone/receipt/providers/fernet/__init__.py
+@@ -14,5 +14,4 @@
+ 
+ from keystone.receipt.providers.fernet.core import Provider
+ 
+-
+ __all__ = ("Provider",)
+diff --git a/keystone/receipt/providers/fernet/core.py b/keystone/receipt/providers/fernet/core.py
+index 0ac4d9af0..734f13dc7 100644
+--- a/keystone/receipt/providers/fernet/core.py
++++ b/keystone/receipt/providers/fernet/core.py
+@@ -14,7 +14,6 @@
+ 
+ import os
+ 
+-
+ from keystone.common import utils as ks_utils
+ import keystone.conf
+ from keystone import exception
+@@ -22,7 +21,6 @@ from keystone.i18n import _
+ from keystone.receipt.providers import base
+ from keystone.receipt import receipt_formatters as tf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/receipt/receipt_formatters.py b/keystone/receipt/receipt_formatters.py
+index 2ad0e38be..9cf5c9e62 100644
+--- a/keystone/receipt/receipt_formatters.py
++++ b/keystone/receipt/receipt_formatters.py
+@@ -29,7 +29,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/resource/backends/base.py b/keystone/resource/backends/base.py
+index 98a6207f5..f7aa84675 100644
+--- a/keystone/resource/backends/base.py
++++ b/keystone/resource/backends/base.py
+@@ -17,7 +17,6 @@ import abc
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/resource/backends/resource_options.py b/keystone/resource/backends/resource_options.py
+index bc9d4116e..2ecfacebc 100644
+--- a/keystone/resource/backends/resource_options.py
++++ b/keystone/resource/backends/resource_options.py
+@@ -13,7 +13,6 @@
+ from keystone.common import resource_options
+ from keystone.common.resource_options import options as ro_opt
+ 
+-
+ PROJECT_OPTIONS_REGISTRY = resource_options.ResourceOptionRegistry('PROJECT')
+ 
+ 
+diff --git a/keystone/resource/backends/sql.py b/keystone/resource/backends/sql.py
+index cfbe626e0..a7554250e 100644
+--- a/keystone/resource/backends/sql.py
++++ b/keystone/resource/backends/sql.py
+@@ -21,7 +21,6 @@ from keystone import exception
+ from keystone.resource.backends import base
+ from keystone.resource.backends import sql_model
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ 
+diff --git a/keystone/revoke/backends/base.py b/keystone/revoke/backends/base.py
+index 641092fa9..75e48e4c0 100644
+--- a/keystone/revoke/backends/base.py
++++ b/keystone/revoke/backends/base.py
+@@ -20,7 +20,6 @@ from oslo_utils import timeutils
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/revoke/backends/sql.py b/keystone/revoke/backends/sql.py
+index 5e676b268..1df9ed650 100644
+--- a/keystone/revoke/backends/sql.py
++++ b/keystone/revoke/backends/sql.py
+@@ -10,14 +10,13 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
++from oslo_db import api as oslo_db_api
+ import sqlalchemy
+ 
+ from keystone.common import sql
+ from keystone.models import revoke_model
+ from keystone.revoke.backends import base
+ 
+-from oslo_db import api as oslo_db_api
+-
+ 
+ class RevocationEvent(sql.ModelBase, sql.ModelDictMixin):
+     __tablename__ = 'revocation_event'
+diff --git a/keystone/revoke/core.py b/keystone/revoke/core.py
+index 4d12abd48..77425f643 100644
+--- a/keystone/revoke/core.py
++++ b/keystone/revoke/core.py
+@@ -20,7 +20,6 @@ from keystone.i18n import _
+ from keystone.models import revoke_model
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ # This builds a discrete cache region dedicated to revoke events. The API can
+diff --git a/keystone/server/__init__.py b/keystone/server/__init__.py
+index 96f27aefb..497153d75 100644
+--- a/keystone/server/__init__.py
++++ b/keystone/server/__init__.py
+@@ -17,7 +17,6 @@ from keystone.common import sql
+ import keystone.conf
+ from keystone.server import backends
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/server/flask/common.py b/keystone/server/flask/common.py
+index a4609bf25..4c1b506fd 100644
+--- a/keystone/server/flask/common.py
++++ b/keystone/server/flask/common.py
+@@ -22,7 +22,6 @@ import flask
+ from flask import blueprints
+ import flask_restful
+ import flask_restful.utils
+-import http.client
+ from oslo_log import log
+ from oslo_log import versionutils
+ from oslo_serialization import jsonutils
+@@ -38,7 +37,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone import notifications
+ 
+-
+ # NOTE(morgan): Capture the relevant part of the flask url route rule for
+ # substitution. In flask arguments (e.g. url elements to be passed to the
+ # "resource" method, e.g. user_id, are specified like `<string:user_id>`
+diff --git a/keystone/server/flask/request_processing/middleware/auth_context.py b/keystone/server/flask/request_processing/middleware/auth_context.py
+index fb2125ce2..f23a487ca 100644
+--- a/keystone/server/flask/request_processing/middleware/auth_context.py
++++ b/keystone/server/flask/request_processing/middleware/auth_context.py
+@@ -16,7 +16,6 @@ import itertools
+ import re
+ import wsgiref.util
+ 
+-import http.client
+ from keystonemiddleware import auth_token
+ import oslo_i18n
+ from oslo_log import log
+diff --git a/keystone/server/flask/request_processing/req_logging.py b/keystone/server/flask/request_processing/req_logging.py
+index c1c39e3f2..810ac318c 100644
+--- a/keystone/server/flask/request_processing/req_logging.py
++++ b/keystone/server/flask/request_processing/req_logging.py
+@@ -16,7 +16,6 @@
+ import flask
+ from oslo_log import log
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ 
+diff --git a/keystone/tests/functional/shared/test_running.py b/keystone/tests/functional/shared/test_running.py
+index 594e4379f..86a1e3f80 100644
+--- a/keystone/tests/functional/shared/test_running.py
++++ b/keystone/tests/functional/shared/test_running.py
+@@ -15,7 +15,6 @@ import testtools.matchers
+ 
+ from keystone.tests.functional import core as functests
+ 
+-
+ is_multiple_choices = testtools.matchers.Equals(
+     requests.status_codes.codes.multiple_choices
+ )
+diff --git a/keystone/tests/hacking/checks.py b/keystone/tests/hacking/checks.py
+index ab3c7c583..8deaf4f7e 100644
+--- a/keystone/tests/hacking/checks.py
++++ b/keystone/tests/hacking/checks.py
+@@ -24,9 +24,10 @@ please see pycodestyle.py.
+ """
+ 
+ import ast
+-from hacking import core
+ import re
+ 
++from hacking import core
++
+ 
+ class BaseASTChecker(ast.NodeVisitor):
+     """Provides a simple framework for writing AST-based checks.
+diff --git a/keystone/tests/protection/v3/test_access_rules.py b/keystone/tests/protection/v3/test_access_rules.py
+index 26cfe6f7b..4855967b6 100644
+--- a/keystone/tests/protection/v3/test_access_rules.py
++++ b/keystone/tests/protection/v3/test_access_rules.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_application_credential.py b/keystone/tests/protection/v3/test_application_credential.py
+index 664c3f5a2..f57fbba61 100644
+--- a/keystone/tests/protection/v3/test_application_credential.py
++++ b/keystone/tests/protection/v3/test_application_credential.py
+@@ -11,9 +11,9 @@
+ #    under the License.
+ 
+ import datetime
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import base as base_policy
+diff --git a/keystone/tests/protection/v3/test_consumer.py b/keystone/tests/protection/v3/test_consumer.py
+index 274bfe919..721218900 100644
+--- a/keystone/tests/protection/v3/test_consumer.py
++++ b/keystone/tests/protection/v3/test_consumer.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_credentials.py b/keystone/tests/protection/v3/test_credentials.py
+index f2c03420d..699106276 100644
+--- a/keystone/tests/protection/v3/test_credentials.py
++++ b/keystone/tests/protection/v3/test_credentials.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import base as bp
+diff --git a/keystone/tests/protection/v3/test_domain_config.py b/keystone/tests/protection/v3/test_domain_config.py
+index 9d97f0f16..819ccbad1 100644
+--- a/keystone/tests/protection/v3/test_domain_config.py
++++ b/keystone/tests/protection/v3/test_domain_config.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_domain_roles.py b/keystone/tests/protection/v3/test_domain_roles.py
+index a3194eac6..6e32936c2 100644
+--- a/keystone/tests/protection/v3/test_domain_roles.py
++++ b/keystone/tests/protection/v3/test_domain_roles.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_domains.py b/keystone/tests/protection/v3/test_domains.py
+index 8e904b037..ae1c2e5e5 100644
+--- a/keystone/tests/protection/v3/test_domains.py
++++ b/keystone/tests/protection/v3/test_domains.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import domain as dp
+diff --git a/keystone/tests/protection/v3/test_ec2_credential.py b/keystone/tests/protection/v3/test_ec2_credential.py
+index a30ae58b1..7ab097beb 100644
+--- a/keystone/tests/protection/v3/test_ec2_credential.py
++++ b/keystone/tests/protection/v3/test_ec2_credential.py
+@@ -11,6 +11,7 @@
+ #    under the License.
+ 
+ import http.client
++
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import base as bp
+diff --git a/keystone/tests/protection/v3/test_endpoint_group.py b/keystone/tests/protection/v3/test_endpoint_group.py
+index b6b65fe9f..a913bc37e 100644
+--- a/keystone/tests/protection/v3/test_endpoint_group.py
++++ b/keystone/tests/protection/v3/test_endpoint_group.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_endpoints.py b/keystone/tests/protection/v3/test_endpoints.py
+index 4ea2ea2fb..0edd0811e 100644
+--- a/keystone/tests/protection/v3/test_endpoints.py
++++ b/keystone/tests/protection/v3/test_endpoints.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_grants.py b/keystone/tests/protection/v3/test_grants.py
+index 27c75bba2..70e30fe8d 100644
+--- a/keystone/tests/protection/v3/test_grants.py
++++ b/keystone/tests/protection/v3/test_grants.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import grant as gp
+diff --git a/keystone/tests/protection/v3/test_groups.py b/keystone/tests/protection/v3/test_groups.py
+index d8441aad3..0fb36eade 100644
+--- a/keystone/tests/protection/v3/test_groups.py
++++ b/keystone/tests/protection/v3/test_groups.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import group as gp
+diff --git a/keystone/tests/protection/v3/test_identity_providers.py b/keystone/tests/protection/v3/test_identity_providers.py
+index 80dc4d62a..e3f985c98 100644
+--- a/keystone/tests/protection/v3/test_identity_providers.py
++++ b/keystone/tests/protection/v3/test_identity_providers.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_limits.py b/keystone/tests/protection/v3/test_limits.py
+index fd40a22e0..41bbdb20d 100644
+--- a/keystone/tests/protection/v3/test_limits.py
++++ b/keystone/tests/protection/v3/test_limits.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_mappings.py b/keystone/tests/protection/v3/test_mappings.py
+index 803f10f3d..6785d9686 100644
+--- a/keystone/tests/protection/v3/test_mappings.py
++++ b/keystone/tests/protection/v3/test_mappings.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_policy.py b/keystone/tests/protection/v3/test_policy.py
+index 913a3c5ff..637956d24 100644
+--- a/keystone/tests/protection/v3/test_policy.py
++++ b/keystone/tests/protection/v3/test_policy.py
+@@ -10,11 +10,10 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import json
+ import uuid
+ 
+-import http.client
+-
+ from keystone.common import provider_api
+ import keystone.conf
+ from keystone.tests.common import auth as common_auth
+diff --git a/keystone/tests/protection/v3/test_policy_association.py b/keystone/tests/protection/v3/test_policy_association.py
+index 16ec1bbcd..31b772384 100644
+--- a/keystone/tests/protection/v3/test_policy_association.py
++++ b/keystone/tests/protection/v3/test_policy_association.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_project_endpoint.py b/keystone/tests/protection/v3/test_project_endpoint.py
+index 653a84cd0..6108a05fd 100644
+--- a/keystone/tests/protection/v3/test_project_endpoint.py
++++ b/keystone/tests/protection/v3/test_project_endpoint.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import base as bp
+diff --git a/keystone/tests/protection/v3/test_project_tags.py b/keystone/tests/protection/v3/test_project_tags.py
+index c1d6048ba..d8bcb3a0d 100644
+--- a/keystone/tests/protection/v3/test_project_tags.py
++++ b/keystone/tests/protection/v3/test_project_tags.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import project as pp
+diff --git a/keystone/tests/protection/v3/test_projects.py b/keystone/tests/protection/v3/test_projects.py
+index 7b941cf8d..0a2b365d1 100644
+--- a/keystone/tests/protection/v3/test_projects.py
++++ b/keystone/tests/protection/v3/test_projects.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import project as pp
+diff --git a/keystone/tests/protection/v3/test_protocols.py b/keystone/tests/protection/v3/test_protocols.py
+index ec596e8e2..019748f72 100644
+--- a/keystone/tests/protection/v3/test_protocols.py
++++ b/keystone/tests/protection/v3/test_protocols.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_regions.py b/keystone/tests/protection/v3/test_regions.py
+index 25cdf667b..29071ba4b 100644
+--- a/keystone/tests/protection/v3/test_regions.py
++++ b/keystone/tests/protection/v3/test_regions.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_registered_limits.py b/keystone/tests/protection/v3/test_registered_limits.py
+index 12040cc24..e59ea2d98 100644
+--- a/keystone/tests/protection/v3/test_registered_limits.py
++++ b/keystone/tests/protection/v3/test_registered_limits.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_roles.py b/keystone/tests/protection/v3/test_roles.py
+index 4de1acd79..36b37b21a 100644
+--- a/keystone/tests/protection/v3/test_roles.py
++++ b/keystone/tests/protection/v3/test_roles.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_service_providers.py b/keystone/tests/protection/v3/test_service_providers.py
+index b2b6bddd0..7ff88a4fe 100644
+--- a/keystone/tests/protection/v3/test_service_providers.py
++++ b/keystone/tests/protection/v3/test_service_providers.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_services.py b/keystone/tests/protection/v3/test_services.py
+index c543a2041..181e19224 100644
+--- a/keystone/tests/protection/v3/test_services.py
++++ b/keystone/tests/protection/v3/test_services.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_system_assignments.py b/keystone/tests/protection/v3/test_system_assignments.py
+index 5ebcf3907..ea9f4c047 100644
+--- a/keystone/tests/protection/v3/test_system_assignments.py
++++ b/keystone/tests/protection/v3/test_system_assignments.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import base
+diff --git a/keystone/tests/protection/v3/test_tokens.py b/keystone/tests/protection/v3/test_tokens.py
+index 87d64afb7..17e6f5a37 100644
+--- a/keystone/tests/protection/v3/test_tokens.py
++++ b/keystone/tests/protection/v3/test_tokens.py
+@@ -10,9 +10,8 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/protection/v3/test_trusts.py b/keystone/tests/protection/v3/test_trusts.py
+index b6ff6e923..16c405650 100644
+--- a/keystone/tests/protection/v3/test_trusts.py
++++ b/keystone/tests/protection/v3/test_trusts.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common import provider_api
+diff --git a/keystone/tests/protection/v3/test_users.py b/keystone/tests/protection/v3/test_users.py
+index 85b6b55e5..9a5b34810 100644
+--- a/keystone/tests/protection/v3/test_users.py
++++ b/keystone/tests/protection/v3/test_users.py
+@@ -10,9 +10,9 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ 
+ from keystone.common.policies import user as up
+diff --git a/keystone/tests/unit/application_credential/backends/test_sql.py b/keystone/tests/unit/application_credential/backends/test_sql.py
+index 2d2ffda52..0e19382e9 100644
+--- a/keystone/tests/unit/application_credential/backends/test_sql.py
++++ b/keystone/tests/unit/application_credential/backends/test_sql.py
+@@ -17,7 +17,6 @@ from keystone.tests.unit.application_credential import test_backends
+ from keystone.tests.unit.backend import core_sql
+ from keystone.tests.unit.ksfixtures import database
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+ 
+diff --git a/keystone/tests/unit/application_credential/test_backends.py b/keystone/tests/unit/application_credential/test_backends.py
+index 196df3b59..36a558015 100644
+--- a/keystone/tests/unit/application_credential/test_backends.py
++++ b/keystone/tests/unit/application_credential/test_backends.py
+@@ -20,7 +20,6 @@ from keystone.common import provider_api
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/assignment/test_backends.py b/keystone/tests/unit/assignment/test_backends.py
+index b3c0df066..c0df09f7d 100644
+--- a/keystone/tests/unit/assignment/test_backends.py
++++ b/keystone/tests/unit/assignment/test_backends.py
+@@ -21,7 +21,6 @@ from keystone import exception
+ from keystone.tests import unit
+ from keystone.tests.unit import default_fixtures
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/auth/plugins/test_mapped.py b/keystone/tests/unit/auth/plugins/test_mapped.py
+index 4320f3166..3b9f84764 100644
+--- a/keystone/tests/unit/auth/plugins/test_mapped.py
++++ b/keystone/tests/unit/auth/plugins/test_mapped.py
+@@ -9,9 +9,8 @@
+ # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ # License for the specific language governing permissions and limitations
+ # under the License.
+-import uuid
+-
+ from unittest import mock
++import uuid
+ 
+ from keystone.assignment.core import Manager as AssignmentApi
+ from keystone.auth.plugins import mapped
+diff --git a/keystone/tests/unit/backend/core_ldap.py b/keystone/tests/unit/backend/core_ldap.py
+index a6c5a1735..b82e10a0f 100644
+--- a/keystone/tests/unit/backend/core_ldap.py
++++ b/keystone/tests/unit/backend/core_ldap.py
+@@ -12,7 +12,6 @@
+ 
+ import ldap
+ 
+-
+ from keystone.common import cache
+ from keystone.common import provider_api
+ import keystone.conf
+@@ -21,7 +20,6 @@ from keystone.tests.unit import default_fixtures
+ from keystone.tests.unit.ksfixtures import database
+ from keystone.tests.unit.ksfixtures import ldapdb
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/common/sql/test_upgrades.py b/keystone/tests/unit/common/sql/test_upgrades.py
+index b8cd51adf..df5d85a56 100644
+--- a/keystone/tests/unit/common/sql/test_upgrades.py
++++ b/keystone/tests/unit/common/sql/test_upgrades.py
+@@ -30,17 +30,15 @@ from oslo_log.fixture import logging_error as log_fixture
+ from oslo_log import log as logging
+ from oslotest import base
+ 
+-from keystone.common import sql
+-from keystone.common.sql import upgrades
+-import keystone.conf
+-from keystone.tests.unit import ksfixtures
+-
+ # We need to import all of these so the tables are registered. It would be
+ # easier if these were all in a central location :(
+ import keystone.application_credential.backends.sql  # noqa: F401
+ import keystone.assignment.backends.sql  # noqa: F401
+ import keystone.assignment.role_backends.sql_model  # noqa: F401
+ import keystone.catalog.backends.sql  # noqa: F401
++from keystone.common import sql
++from keystone.common.sql import upgrades
++import keystone.conf
+ import keystone.credential.backends.sql  # noqa: F401
+ import keystone.endpoint_policy.backends.sql  # noqa: F401
+ import keystone.federation.backends.sql  # noqa: F401
+@@ -52,6 +50,7 @@ import keystone.policy.backends.sql  # noqa: F401
+ import keystone.resource.backends.sql_model  # noqa: F401
+ import keystone.resource.config_backends.sql  # noqa: F401
+ import keystone.revoke.backends.sql  # noqa: F401
++from keystone.tests.unit import ksfixtures
+ import keystone.trust.backends.sql  # noqa: F401
+ 
+ CONF = keystone.conf.CONF
+diff --git a/keystone/tests/unit/common/test_cache.py b/keystone/tests/unit/common/test_cache.py
+index dd5f77bc7..784a691f4 100644
+--- a/keystone/tests/unit/common/test_cache.py
++++ b/keystone/tests/unit/common/test_cache.py
+@@ -20,7 +20,6 @@ from keystone.common import cache
+ import keystone.conf
+ from keystone.tests import unit
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/tests/unit/common/test_database_conflicts.py b/keystone/tests/unit/common/test_database_conflicts.py
+index 93b722920..775ca584c 100644
+--- a/keystone/tests/unit/common/test_database_conflicts.py
++++ b/keystone/tests/unit/common/test_database_conflicts.py
+@@ -19,7 +19,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import mapping_fixtures
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/common/test_notifications.py b/keystone/tests/unit/common/test_notifications.py
+index 3030a1ed0..fbcca9af7 100644
+--- a/keystone/tests/unit/common/test_notifications.py
++++ b/keystone/tests/unit/common/test_notifications.py
+@@ -13,12 +13,12 @@
+ #   under the License.
+ 
+ import datetime
++import http.client
+ from unittest import mock
+ import uuid
+ 
+ import fixtures
+ import freezegun
+-import http.client
+ from oslo_config import fixture as config_fixture
+ from oslo_log import log
+ import oslo_messaging
+@@ -34,7 +34,6 @@ from keystone import notifications
+ from keystone.tests import unit
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/common/test_rbac_enforcer.py b/keystone/tests/unit/common/test_rbac_enforcer.py
+index 499a76285..570030831 100644
+--- a/keystone/tests/unit/common/test_rbac_enforcer.py
++++ b/keystone/tests/unit/common/test_rbac_enforcer.py
+@@ -27,7 +27,6 @@ from keystone import exception
+ from keystone.tests import unit
+ from keystone.tests.unit import rest
+ 
+-
+ PROVIDER_APIS = provider_api.ProviderAPIs
+ 
+ 
+diff --git a/keystone/tests/unit/common/test_sql_core.py b/keystone/tests/unit/common/test_sql_core.py
+index dc9581133..46f01e339 100644
+--- a/keystone/tests/unit/common/test_sql_core.py
++++ b/keystone/tests/unit/common/test_sql_core.py
+@@ -17,7 +17,6 @@ from keystone.common import sql
+ from keystone.tests import unit
+ from keystone.tests.unit import utils
+ 
+-
+ ModelBase = declarative.declarative_base()
+ 
+ 
+diff --git a/keystone/tests/unit/common/test_utils.py b/keystone/tests/unit/common/test_utils.py
+index 2f12a0721..2f013ae71 100644
+--- a/keystone/tests/unit/common/test_utils.py
++++ b/keystone/tests/unit/common/test_utils.py
+@@ -14,6 +14,7 @@ import datetime
+ import fixtures
+ import uuid
+ 
++import fixtures
+ import freezegun
+ from oslo_config import fixture as config_fixture
+ from oslo_log import log
+@@ -28,7 +29,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit import utils
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ TZ = utils.TZ
+diff --git a/keystone/tests/unit/contrib/federation/test_utils.py b/keystone/tests/unit/contrib/federation/test_utils.py
+index cc84bac03..c5facf7e1 100644
+--- a/keystone/tests/unit/contrib/federation/test_utils.py
++++ b/keystone/tests/unit/contrib/federation/test_utils.py
+@@ -10,9 +10,10 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
+-import flask
++from unittest import mock
+ import uuid
+ 
++import flask
+ from oslo_config import fixture as config_fixture
+ from oslo_serialization import jsonutils
+ 
+diff --git a/keystone/tests/unit/core.py b/keystone/tests/unit/core.py
+index 82283b4bf..5772c4bac 100644
+--- a/keystone/tests/unit/core.py
++++ b/keystone/tests/unit/core.py
+@@ -18,6 +18,7 @@ import contextlib
+ import datetime
+ import functools
+ import hashlib
++import http.client
+ import json
+ import secrets
+ 
+@@ -35,7 +36,7 @@ from cryptography import x509
+ import fixtures
+ import flask
+ from flask import testing as flask_testing
+-import http.client
++import ldap
+ from oslo_config import fixture as config_fixture
+ from oslo_context import context as oslo_context
+ from oslo_context import fixture as oslo_ctx_fixture
+@@ -59,7 +60,6 @@ from keystone.server.flask import application as flask_app
+ from keystone.server.flask import core as keystone_flask
+ from keystone.tests.unit import ksfixtures
+ 
+-
+ keystone.conf.configure()
+ keystone.conf.set_config_defaults()
+ 
+diff --git a/keystone/tests/unit/credential/test_backend_sql.py b/keystone/tests/unit/credential/test_backend_sql.py
+index 01a4a94ec..e293e3dc5 100644
+--- a/keystone/tests/unit/credential/test_backend_sql.py
++++ b/keystone/tests/unit/credential/test_backend_sql.py
+@@ -15,15 +15,14 @@ import uuid
+ from oslo_config import fixture as config_fixture
+ 
+ from keystone.common import provider_api
++from keystone.credential.backends import sql as credential_sql
+ from keystone.credential.providers import fernet as credential_provider
++from keystone import exception
+ from keystone.tests import unit
+ from keystone.tests.unit import default_fixtures
+ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit.ksfixtures import database
+ 
+-from keystone.credential.backends import sql as credential_sql
+-from keystone import exception
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+ 
+diff --git a/keystone/tests/unit/credential/test_fernet_provider.py b/keystone/tests/unit/credential/test_fernet_provider.py
+index 7a59330d8..0a8075b95 100644
+--- a/keystone/tests/unit/credential/test_fernet_provider.py
++++ b/keystone/tests/unit/credential/test_fernet_provider.py
+@@ -10,10 +10,10 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
+-import fixtures
+ import hashlib
+ import uuid
+ 
++import fixtures
+ from oslo_log import log
+ 
+ from keystone.common import fernet_utils
+diff --git a/keystone/tests/unit/filtering.py b/keystone/tests/unit/filtering.py
+index 7ed2b0f4e..e70dbdd7e 100644
+--- a/keystone/tests/unit/filtering.py
++++ b/keystone/tests/unit/filtering.py
+@@ -18,7 +18,6 @@ from keystone.common import provider_api
+ import keystone.conf
+ from keystone import exception
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ CONF = keystone.conf.CONF
+ 
+diff --git a/keystone/tests/unit/identity/backends/test_ldap_common.py b/keystone/tests/unit/identity/backends/test_ldap_common.py
+index 8428ad336..c47b26ad5 100644
+--- a/keystone/tests/unit/identity/backends/test_ldap_common.py
++++ b/keystone/tests/unit/identity/backends/test_ldap_common.py
+@@ -30,7 +30,6 @@ from keystone.tests.unit import fakeldap
+ from keystone.tests.unit.ksfixtures import database
+ from keystone.tests.unit.ksfixtures import ldapdb
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/identity/shadow_users/test_backend.py b/keystone/tests/unit/identity/shadow_users/test_backend.py
+index b99c7bcd5..710bc0d83 100644
+--- a/keystone/tests/unit/identity/shadow_users/test_backend.py
++++ b/keystone/tests/unit/identity/shadow_users/test_backend.py
+@@ -20,7 +20,6 @@ from keystone import exception
+ from keystone.identity.backends import sql_model as model
+ from keystone.tests import unit
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/identity/test_backend_sql.py b/keystone/tests/unit/identity/test_backend_sql.py
+index 4029b9f08..226577c49 100644
+--- a/keystone/tests/unit/identity/test_backend_sql.py
++++ b/keystone/tests/unit/identity/test_backend_sql.py
+@@ -27,7 +27,6 @@ from keystone.identity.backends import resource_options as iro
+ from keystone.identity.backends import sql_model as model
+ from keystone.tests.unit import test_backend_sql
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/identity/test_backends.py b/keystone/tests/unit/identity/test_backends.py
+index 025dccd2a..cc68ccc4c 100644
+--- a/keystone/tests/unit/identity/test_backends.py
++++ b/keystone/tests/unit/identity/test_backends.py
+@@ -24,7 +24,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import default_fixtures
+ from keystone.tests.unit import filtering
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/identity/test_core.py b/keystone/tests/unit/identity/test_core.py
+index 6c57af278..5fd5e6775 100644
+--- a/keystone/tests/unit/identity/test_core.py
++++ b/keystone/tests/unit/identity/test_core.py
+@@ -17,6 +17,7 @@ import os
+ from unittest import mock
+ import uuid
+ 
++import fixtures
+ from oslo_config import fixture as config_fixture
+ 
+ from keystone.common import provider_api
+@@ -27,7 +28,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import default_fixtures
+ from keystone.tests.unit.ksfixtures import database
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/ksfixtures/__init__.py b/keystone/tests/unit/ksfixtures/__init__.py
+index d1e441f35..f848233d0 100644
+--- a/keystone/tests/unit/ksfixtures/__init__.py
++++ b/keystone/tests/unit/ksfixtures/__init__.py
+@@ -14,11 +14,12 @@
+ from keystone.tests.unit.ksfixtures.auth_plugins import (
+     ConfigAuthPlugins,
+ )  # noqa
+-from keystone.tests.unit.ksfixtures.backendloader import BackendLoader  # noqa
+-from keystone.tests.unit.ksfixtures.cache import Cache  # noqa
+ from keystone.tests.unit.ksfixtures.jws_key_repository import (
+     JWSKeyRepository,
+ )  # noqa
++
++from keystone.tests.unit.ksfixtures.backendloader import BackendLoader  # noqa
++from keystone.tests.unit.ksfixtures.cache import Cache  # noqa
+ from keystone.tests.unit.ksfixtures.key_repository import KeyRepository  # noqa
+ from keystone.tests.unit.ksfixtures.logging import StandardLogging  # noqa
+ from keystone.tests.unit.ksfixtures.policy import Policy  # noqa
+diff --git a/keystone/tests/unit/ksfixtures/cache.py b/keystone/tests/unit/ksfixtures/cache.py
+index 0c1fd4aae..2b74237ee 100644
+--- a/keystone/tests/unit/ksfixtures/cache.py
++++ b/keystone/tests/unit/ksfixtures/cache.py
+@@ -17,7 +17,6 @@ from keystone import catalog
+ from keystone.common import cache
+ from keystone import revoke
+ 
+-
+ CACHE_REGIONS = (
+     cache.CACHE_REGION,
+     catalog.COMPUTED_CATALOG_REGION,
+diff --git a/keystone/tests/unit/ksfixtures/database.py b/keystone/tests/unit/ksfixtures/database.py
+index 9727e91c2..806b12472 100644
+--- a/keystone/tests/unit/ksfixtures/database.py
++++ b/keystone/tests/unit/ksfixtures/database.py
+@@ -22,7 +22,6 @@ from keystone.common import sql
+ import keystone.conf
+ from keystone.tests import unit
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/tests/unit/receipt/test_fernet_provider.py b/keystone/tests/unit/receipt/test_fernet_provider.py
+index 60b499bae..deb992c65 100644
+--- a/keystone/tests/unit/receipt/test_fernet_provider.py
++++ b/keystone/tests/unit/receipt/test_fernet_provider.py
+@@ -33,7 +33,6 @@ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit.ksfixtures import database
+ from keystone.token import provider as token_provider
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/resource/test_backends.py b/keystone/tests/unit/resource/test_backends.py
+index 4db66394a..a66971f81 100644
+--- a/keystone/tests/unit/resource/test_backends.py
++++ b/keystone/tests/unit/resource/test_backends.py
+@@ -26,7 +26,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import default_fixtures
+ from keystone.tests.unit import utils as test_utils
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/resource/test_core.py b/keystone/tests/unit/resource/test_core.py
+index 130d470c7..ff5011233 100644
+--- a/keystone/tests/unit/resource/test_core.py
++++ b/keystone/tests/unit/resource/test_core.py
+@@ -24,7 +24,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import default_fixtures
+ from keystone.tests.unit.ksfixtures import database
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/rest.py b/keystone/tests/unit/rest.py
+index bcdb24048..0e48f1f5b 100644
+--- a/keystone/tests/unit/rest.py
++++ b/keystone/tests/unit/rest.py
+@@ -13,6 +13,7 @@
+ # under the License.
+ 
+ import http.client
++
+ from oslo_serialization import jsonutils
+ import webtest
+ 
+diff --git a/keystone/tests/unit/server/test_keystone_flask.py b/keystone/tests/unit/server/test_keystone_flask.py
+index c2f3e798e..ea2aa83ac 100644
+--- a/keystone/tests/unit/server/test_keystone_flask.py
++++ b/keystone/tests/unit/server/test_keystone_flask.py
+@@ -15,7 +15,6 @@ import uuid
+ import fixtures
+ import flask
+ import flask_restful
+-import functools
+ from oslo_policy import policy
+ from oslo_serialization import jsonutils
+ from testtools import matchers
+@@ -29,7 +28,6 @@ from keystone.server.flask import common as flask_common
+ from keystone.server.flask.request_processing import json_body
+ from keystone.tests.unit import rest
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/tests/unit/test_associate_project_endpoint_extension.py b/keystone/tests/unit/test_associate_project_endpoint_extension.py
+index 5b39d3aaa..a88599ff0 100644
+--- a/keystone/tests/unit/test_associate_project_endpoint_extension.py
++++ b/keystone/tests/unit/test_associate_project_endpoint_extension.py
+@@ -13,9 +13,9 @@
+ # under the License.
+ 
+ import copy
++import http.client
+ import uuid
+ 
+-import http.client
+ from testtools import matchers
+ 
+ from keystone.common import provider_api
+diff --git a/keystone/tests/unit/test_auth_plugin.py b/keystone/tests/unit/test_auth_plugin.py
+index 3140f6106..32834060f 100644
+--- a/keystone/tests/unit/test_auth_plugin.py
++++ b/keystone/tests/unit/test_auth_plugin.py
+@@ -25,7 +25,6 @@ from keystone import exception
+ from keystone.tests import unit
+ from keystone.tests.unit.ksfixtures import auth_plugins
+ 
+-
+ # for testing purposes only
+ METHOD_NAME = 'simple_challenge_response'
+ EXPECTED_RESPONSE = uuid.uuid4().hex
+diff --git a/keystone/tests/unit/test_backend_ldap.py b/keystone/tests/unit/test_backend_ldap.py
+index ec23394d2..d17d59bc6 100644
+--- a/keystone/tests/unit/test_backend_ldap.py
++++ b/keystone/tests/unit/test_backend_ldap.py
+@@ -14,11 +14,11 @@
+ # under the License.
+ 
+ import copy
++import http.client
+ from unittest import mock
+ import uuid
+ 
+ import fixtures
+-import http.client
+ import ldap
+ from oslo_log import versionutils
+ import pkg_resources
+@@ -43,7 +43,6 @@ from keystone.tests.unit.ksfixtures import database
+ from keystone.tests.unit.ksfixtures import ldapdb
+ from keystone.tests.unit.resource import test_backends as resource_tests
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_backend_ldap_pool.py b/keystone/tests/unit/test_backend_ldap_pool.py
+index 63b9e20c0..4a7a6afcc 100644
+--- a/keystone/tests/unit/test_backend_ldap_pool.py
++++ b/keystone/tests/unit/test_backend_ldap_pool.py
+@@ -26,7 +26,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import fakeldap
+ from keystone.tests.unit import test_backend_ldap
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_backend_sql.py b/keystone/tests/unit/test_backend_sql.py
+index 4c85fe03d..55b210b97 100644
+--- a/keystone/tests/unit/test_backend_sql.py
++++ b/keystone/tests/unit/test_backend_sql.py
+@@ -47,7 +47,6 @@ from keystone.tests.unit.resource import test_backends as resource_tests
+ from keystone.tests.unit.trust import test_backends as trust_tests
+ from keystone.trust.backends import sql as trust_sql
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_backend_templated.py b/keystone/tests/unit/test_backend_templated.py
+index 0fc183676..fd2789ead 100644
+--- a/keystone/tests/unit/test_backend_templated.py
++++ b/keystone/tests/unit/test_backend_templated.py
+@@ -22,7 +22,6 @@ from keystone.tests.unit.catalog import test_backends as catalog_tests
+ from keystone.tests.unit import default_fixtures
+ from keystone.tests.unit.ksfixtures import database
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ BROKEN_WRITE_FUNCTIONALITY_MSG = (
+     "Templated backend doesn't correctly " "implement write operations"
+diff --git a/keystone/tests/unit/test_cli.py b/keystone/tests/unit/test_cli.py
+index f1a2e1dfd..7e16fe474 100644
+--- a/keystone/tests/unit/test_cli.py
++++ b/keystone/tests/unit/test_cli.py
+@@ -12,18 +12,18 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
++import argparse
++import configparser
+ import copy
+ import datetime
++import http.client
+ import logging
+ import os
+ from unittest import mock
+ import uuid
+ 
+-import argparse
+-import configparser
+ import fixtures
+ import freezegun
+-import http.client
+ import oslo_config.fixture
+ from oslo_log import log
+ from oslo_serialization import jsonutils
+@@ -55,7 +55,6 @@ from keystone.tests.unit.ksfixtures import policy
+ from keystone.tests.unit.ksfixtures import temporaryfile
+ from keystone.tests.unit import mapping_fixtures
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_config.py b/keystone/tests/unit/test_config.py
+index 992739066..4a13014d6 100644
+--- a/keystone/tests/unit/test_config.py
++++ b/keystone/tests/unit/test_config.py
+@@ -19,7 +19,6 @@ from oslo_config import generator
+ import keystone.conf
+ from keystone.tests import unit
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/tests/unit/test_contrib_ec2_core.py b/keystone/tests/unit/test_contrib_ec2_core.py
+index 14687ac4d..fefc022d2 100644
+--- a/keystone/tests/unit/test_contrib_ec2_core.py
++++ b/keystone/tests/unit/test_contrib_ec2_core.py
+@@ -14,8 +14,8 @@
+ 
+ import datetime
+ import hashlib
+-
+ import http.client
++
+ from keystoneclient.contrib.ec2 import utils as ec2_utils
+ from oslo_utils import timeutils
+ 
+@@ -24,7 +24,6 @@ from keystone.common import utils
+ from keystone.tests import unit
+ from keystone.tests.unit import test_v3
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+ 
+diff --git a/keystone/tests/unit/test_contrib_s3_core.py b/keystone/tests/unit/test_contrib_s3_core.py
+index 97bb3a065..1a2e7bc29 100644
+--- a/keystone/tests/unit/test_contrib_s3_core.py
++++ b/keystone/tests/unit/test_contrib_s3_core.py
+@@ -15,9 +15,8 @@
+ import base64
+ import hashlib
+ import hmac
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.api import s3tokens
+ from keystone.common import provider_api
+diff --git a/keystone/tests/unit/test_exception.py b/keystone/tests/unit/test_exception.py
+index 87c20fb58..85b704a9c 100644
+--- a/keystone/tests/unit/test_exception.py
++++ b/keystone/tests/unit/test_exception.py
+@@ -27,7 +27,6 @@ from keystone import exception
+ from keystone.server.flask.request_processing.middleware import auth_context
+ from keystone.tests import unit
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/tests/unit/test_ldap_livetest.py b/keystone/tests/unit/test_ldap_livetest.py
+index b71a270a0..aaac3aa9c 100644
+--- a/keystone/tests/unit/test_ldap_livetest.py
++++ b/keystone/tests/unit/test_ldap_livetest.py
+@@ -23,7 +23,6 @@ from keystone.identity.backends import ldap as identity_ldap
+ from keystone.tests import unit
+ from keystone.tests.unit import test_backend_ldap
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_ldap_pool_livetest.py b/keystone/tests/unit/test_ldap_pool_livetest.py
+index 0304b4c99..5b9655eb6 100644
+--- a/keystone/tests/unit/test_ldap_pool_livetest.py
++++ b/keystone/tests/unit/test_ldap_pool_livetest.py
+@@ -23,7 +23,6 @@ from keystone.tests.unit import fakeldap
+ from keystone.tests.unit import test_backend_ldap_pool
+ from keystone.tests.unit import test_ldap_livetest
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_ldap_tls_livetest.py b/keystone/tests/unit/test_ldap_tls_livetest.py
+index 8c2261150..f55bccb41 100644
+--- a/keystone/tests/unit/test_ldap_tls_livetest.py
++++ b/keystone/tests/unit/test_ldap_tls_livetest.py
+@@ -22,7 +22,6 @@ from keystone import identity
+ from keystone.tests import unit
+ from keystone.tests.unit import test_ldap_livetest
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_middleware.py b/keystone/tests/unit/test_middleware.py
+index 35acfb8f3..d8808bfc6 100644
+--- a/keystone/tests/unit/test_middleware.py
++++ b/keystone/tests/unit/test_middleware.py
+@@ -18,7 +18,6 @@ from unittest import mock
+ import uuid
+ 
+ import fixtures
+-import http.client
+ import webtest
+ 
+ from keystone.auth import core as auth_core
+@@ -34,7 +33,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import mapping_fixtures
+ from keystone.tests.unit import test_backend_sql
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_policy.py b/keystone/tests/unit/test_policy.py
+index 3697e8fb2..885fa8860 100644
+--- a/keystone/tests/unit/test_policy.py
++++ b/keystone/tests/unit/test_policy.py
+@@ -28,7 +28,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit.ksfixtures import temporaryfile
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/tests/unit/test_receipt_provider.py b/keystone/tests/unit/test_receipt_provider.py
+index bf7e97b7b..5d81f411c 100644
+--- a/keystone/tests/unit/test_receipt_provider.py
++++ b/keystone/tests/unit/test_receipt_provider.py
+@@ -15,9 +15,9 @@
+ import datetime
+ import uuid
+ 
++import freezegun
+ from oslo_utils import timeutils
+ 
+-import freezegun
+ from keystone.common import provider_api
+ from keystone.common import utils
+ import keystone.conf
+@@ -28,7 +28,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit.ksfixtures import database
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_revoke.py b/keystone/tests/unit/test_revoke.py
+index d26efb3e5..8c1f21a28 100644
+--- a/keystone/tests/unit/test_revoke.py
++++ b/keystone/tests/unit/test_revoke.py
+@@ -29,7 +29,6 @@ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit import test_backend_sql
+ from keystone.token import provider
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_sql_banned_operations.py b/keystone/tests/unit/test_sql_banned_operations.py
+index 49d7cacc5..a3af6f80d 100644
+--- a/keystone/tests/unit/test_sql_banned_operations.py
++++ b/keystone/tests/unit/test_sql_banned_operations.py
+@@ -19,17 +19,15 @@ from oslo_db.sqlalchemy import enginefacade
+ from oslo_db.sqlalchemy import test_fixtures
+ from oslo_log import log as logging
+ 
+-from keystone.common import sql
+-from keystone.common.sql import upgrades
+-import keystone.conf
+-from keystone.tests import unit
+-
+ # We need to import all of these so the tables are registered. It would be
+ # easier if these were all in a central location :(
+ import keystone.application_credential.backends.sql  # noqa: F401
+ import keystone.assignment.backends.sql  # noqa: F401
+ import keystone.assignment.role_backends.sql_model  # noqa: F401
+ import keystone.catalog.backends.sql  # noqa: F401
++from keystone.common import sql
++from keystone.common.sql import upgrades
++import keystone.conf
+ import keystone.credential.backends.sql  # noqa: F401
+ import keystone.endpoint_policy.backends.sql  # noqa: F401
+ import keystone.federation.backends.sql  # noqa: F401
+@@ -41,6 +39,7 @@ import keystone.policy.backends.sql  # noqa: F401
+ import keystone.resource.backends.sql_model  # noqa: F401
+ import keystone.resource.config_backends.sql  # noqa: F401
+ import keystone.revoke.backends.sql  # noqa: F401
++from keystone.tests import unit
+ import keystone.trust.backends.sql  # noqa: F401
+ 
+ LOG = logging.getLogger(__name__)
+diff --git a/keystone/tests/unit/test_token_provider.py b/keystone/tests/unit/test_token_provider.py
+index d2d532ef0..0fe0c8ae8 100644
+--- a/keystone/tests/unit/test_token_provider.py
++++ b/keystone/tests/unit/test_token_provider.py
+@@ -13,9 +13,9 @@
+ # under the License.
+ 
+ import datetime
++import urllib
+ 
+ from oslo_utils import timeutils
+-import urllib
+ 
+ from keystone.common import provider_api
+ from keystone.common import utils
+@@ -28,7 +28,6 @@ from keystone.tests.unit.ksfixtures import database
+ from keystone import token
+ from keystone.token import provider
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_v3.py b/keystone/tests/unit/test_v3.py
+index 8d3497421..ed39486eb 100644
+--- a/keystone/tests/unit/test_v3.py
++++ b/keystone/tests/unit/test_v3.py
+@@ -14,10 +14,11 @@
+ 
+ import datetime
+ import http.client
++import uuid
++
+ import oslo_context.context
+ from oslo_serialization import jsonutils
+ from testtools import matchers
+-import uuid
+ import webtest
+ 
+ from keystone.common import authorization
+@@ -31,7 +32,6 @@ from keystone.tests.common import auth as common_auth
+ from keystone.tests import unit
+ from keystone.tests.unit import rest
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ DEFAULT_DOMAIN_ID = 'default'
+ 
+diff --git a/keystone/tests/unit/test_v3_application_credential.py b/keystone/tests/unit/test_v3_application_credential.py
+index 085581e02..d1d78e2bc 100644
+--- a/keystone/tests/unit/test_v3_application_credential.py
++++ b/keystone/tests/unit/test_v3_application_credential.py
+@@ -11,7 +11,7 @@
+ # under the License.
+ 
+ import datetime
+-from testtools import matchers
++import http.client
+ import uuid
+ 
+ import http.client
+@@ -21,7 +21,6 @@ import keystone.conf
+ from keystone.tests import unit
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ MEMBER_PATH_FMT = '/users/%(user_id)s/application_credentials/%(app_cred_id)s'
+diff --git a/keystone/tests/unit/test_v3_assignment.py b/keystone/tests/unit/test_v3_assignment.py
+index b48d18964..258e7a866 100644
+--- a/keystone/tests/unit/test_v3_assignment.py
++++ b/keystone/tests/unit/test_v3_assignment.py
+@@ -11,6 +11,7 @@
+ # under the License.
+ 
+ import datetime
++import http.client
+ import random
+ import uuid
+ 
+@@ -25,7 +26,6 @@ from keystone.resource.backends import base as resource_base
+ from keystone.tests import unit
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_v3_auth.py b/keystone/tests/unit/test_v3_auth.py
+index 76a1721d0..df843c57f 100644
+--- a/keystone/tests/unit/test_v3_auth.py
++++ b/keystone/tests/unit/test_v3_auth.py
+@@ -14,7 +14,7 @@
+ 
+ import copy
+ import datetime
+-import fixtures
++import http.client
+ import itertools
+ import operator
+ import re
+@@ -23,8 +23,8 @@ from urllib import parse
+ import uuid
+ 
+ from cryptography.hazmat.primitives.serialization import Encoding
++import fixtures
+ import freezegun
+-import http.client
+ from oslo_serialization import jsonutils as json
+ from oslo_utils import fixture
+ from oslo_utils import timeutils
+@@ -46,7 +46,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_v3_catalog.py b/keystone/tests/unit/test_v3_catalog.py
+index 38b79bf62..4ca87c96e 100644
+--- a/keystone/tests/unit/test_v3_catalog.py
++++ b/keystone/tests/unit/test_v3_catalog.py
+@@ -13,9 +13,9 @@
+ #    under the License.
+ 
+ import copy
++import http.client
+ import uuid
+ 
+-import http.client
+ from testtools import matchers
+ 
+ from keystone.common import provider_api
+diff --git a/keystone/tests/unit/test_v3_credential.py b/keystone/tests/unit/test_v3_credential.py
+index ac0feaa92..923e5aa34 100644
+--- a/keystone/tests/unit/test_v3_credential.py
++++ b/keystone/tests/unit/test_v3_credential.py
+@@ -13,15 +13,15 @@
+ # under the License.
+ 
+ import hashlib
++import http.client
+ import json
+ from unittest import mock
++import urllib
+ import uuid
+ 
+-import http.client
+ from keystoneclient.contrib.ec2 import utils as ec2_utils
+ from oslo_db import exception as oslo_db_exception
+ from testtools import matchers
+-import urllib
+ 
+ from keystone.api import ec2tokens
+ from keystone.common import provider_api
+@@ -33,7 +33,6 @@ from keystone.tests import unit
+ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit import test_v3
+ 
+-
+ PROVIDERS = provider_api.ProviderAPIs
+ CRED_TYPE_EC2 = ec2tokens.CRED_TYPE_EC2
+ 
+diff --git a/keystone/tests/unit/test_v3_domain_config.py b/keystone/tests/unit/test_v3_domain_config.py
+index 8eeb412f8..68356efbc 100644
+--- a/keystone/tests/unit/test_v3_domain_config.py
++++ b/keystone/tests/unit/test_v3_domain_config.py
+@@ -11,9 +11,8 @@
+ # under the License.
+ 
+ import copy
+-import uuid
+-
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+@@ -21,7 +20,6 @@ from keystone import exception
+ from keystone.tests import unit
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_v3_endpoint_policy.py b/keystone/tests/unit/test_v3_endpoint_policy.py
+index 831316125..0a259ea9d 100644
+--- a/keystone/tests/unit/test_v3_endpoint_policy.py
++++ b/keystone/tests/unit/test_v3_endpoint_policy.py
+@@ -13,6 +13,7 @@
+ #    under the License.
+ 
+ import http.client
++
+ from testtools import matchers
+ 
+ from keystone.common import provider_api
+diff --git a/keystone/tests/unit/test_v3_federation.py b/keystone/tests/unit/test_v3_federation.py
+index 874f0ca7e..4bc1c9542 100644
+--- a/keystone/tests/unit/test_v3_federation.py
++++ b/keystone/tests/unit/test_v3_federation.py
+@@ -11,24 +11,24 @@
+ # under the License.
+ 
+ import copy
++import http.client
+ import os
+ import random
+ import re
+ import subprocess
+-from testtools import matchers
+ from unittest import mock
++import urllib
+ import uuid
+ 
+ import fixtures
+ import flask
+-import http.client
+ from lxml import etree
+ from oslo_serialization import jsonutils
+ from oslo_utils import importutils
+ import saml2
+ from saml2 import saml
+ from saml2 import sigver
+-import urllib
++from testtools import matchers
+ 
+ xmldsig = importutils.try_import("saml2.xmldsig")
+ if not xmldsig:
+@@ -51,7 +51,6 @@ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit import mapping_fixtures
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ ROOTDIR = os.path.dirname(os.path.abspath(__file__))
+diff --git a/keystone/tests/unit/test_v3_filters.py b/keystone/tests/unit/test_v3_filters.py
+index be1a0ea4b..5bb23a16f 100644
+--- a/keystone/tests/unit/test_v3_filters.py
++++ b/keystone/tests/unit/test_v3_filters.py
+@@ -14,9 +14,9 @@
+ # under the License.
+ 
+ import datetime
++import http.client
+ 
+ import freezegun
+-import http.client
+ from oslo_config import fixture as config_fixture
+ from oslo_serialization import jsonutils
+ 
+@@ -28,7 +28,6 @@ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit.ksfixtures import temporaryfile
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_v3_identity.py b/keystone/tests/unit/test_v3_identity.py
+index 77d578720..1e8a13ce0 100644
+--- a/keystone/tests/unit/test_v3_identity.py
++++ b/keystone/tests/unit/test_v3_identity.py
+@@ -13,12 +13,12 @@
+ # under the License.
+ 
+ import datetime
++import http.client
+ from unittest import mock
+ import uuid
+ 
+ import fixtures
+ import freezegun
+-import http.client
+ from oslo_db import exception as oslo_db_exception
+ from oslo_log import log
+ from testtools import matchers
+@@ -37,7 +37,6 @@ from keystone.tests.unit.ksfixtures import database
+ from keystone.tests.unit import mapping_fixtures
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_v3_oauth1.py b/keystone/tests/unit/test_v3_oauth1.py
+index 66192f0ef..8fea8c9dd 100644
+--- a/keystone/tests/unit/test_v3_oauth1.py
++++ b/keystone/tests/unit/test_v3_oauth1.py
+@@ -14,16 +14,16 @@
+ 
+ import copy
+ import datetime
++import http.client
+ import random
+ from unittest import mock
++import urllib
++from urllib import parse as urlparse
+ import uuid
+ 
+ import freezegun
+-import http.client
+ from oslo_serialization import jsonutils
+ from pycadf import cadftaxonomy
+-import urllib
+-from urllib import parse as urlparse
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+@@ -36,7 +36,6 @@ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit.ksfixtures import temporaryfile
+ from keystone.tests.unit import test_v3
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_v3_oauth2.py b/keystone/tests/unit/test_v3_oauth2.py
+index 1facfa988..17643ed80 100644
+--- a/keystone/tests/unit/test_v3_oauth2.py
++++ b/keystone/tests/unit/test_v3_oauth2.py
+@@ -13,15 +13,16 @@
+ # under the License.
+ 
+ from base64 import b64encode
+-from cryptography.hazmat.primitives.serialization import Encoding
+-import fixtures
+ import http
+ from http import client
+-from oslo_log import log
+-from oslo_serialization import jsonutils
+ from unittest import mock
+ from urllib import parse
+ 
++from cryptography.hazmat.primitives.serialization import Encoding
++import fixtures
++from oslo_log import log
++from oslo_serialization import jsonutils
++
+ from keystone.api.os_oauth2 import AccessTokenResource
+ from keystone.common import provider_api
+ from keystone.common import utils
+diff --git a/keystone/tests/unit/test_v3_os_revoke.py b/keystone/tests/unit/test_v3_os_revoke.py
+index 091b09e02..ecaefb846 100644
+--- a/keystone/tests/unit/test_v3_os_revoke.py
++++ b/keystone/tests/unit/test_v3_os_revoke.py
+@@ -11,11 +11,11 @@
+ # under the License.
+ 
+ import datetime
++import http.client
+ from unittest import mock
+ import uuid
+ 
+ import freezegun
+-import http.client
+ from oslo_db import exception as oslo_db_exception
+ from oslo_utils import timeutils
+ from testtools import matchers
+diff --git a/keystone/tests/unit/test_v3_policy.py b/keystone/tests/unit/test_v3_policy.py
+index 6106bae00..9e37bcc2d 100644
+--- a/keystone/tests/unit/test_v3_policy.py
++++ b/keystone/tests/unit/test_v3_policy.py
+@@ -12,11 +12,10 @@
+ #    License for the specific language governing permissions and limitations
+ #    under the License.
+ 
++import http.client
+ import json
+ import uuid
+ 
+-import http.client
+-
+ from keystone.common import provider_api
+ from keystone.tests import unit
+ from keystone.tests.unit import test_v3
+diff --git a/keystone/tests/unit/test_v3_resource.py b/keystone/tests/unit/test_v3_resource.py
+index f812200f4..418ad9df4 100644
+--- a/keystone/tests/unit/test_v3_resource.py
++++ b/keystone/tests/unit/test_v3_resource.py
+@@ -10,9 +10,9 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
++import http.client
+ import uuid
+ 
+-import http.client
+ from testtools import matchers
+ 
+ from keystone.common import provider_api
+@@ -24,7 +24,6 @@ from keystone.tests.unit import ksfixtures
+ from keystone.tests.unit import test_v3
+ from keystone.tests.unit import utils as test_utils
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/tests/unit/test_v3_trust.py b/keystone/tests/unit/test_v3_trust.py
+index 90e933c13..96496f57f 100644
+--- a/keystone/tests/unit/test_v3_trust.py
++++ b/keystone/tests/unit/test_v3_trust.py
+@@ -14,6 +14,7 @@ import datetime
+ import uuid
+ 
+ import http.client
++import uuid
+ 
+ from keystone.common import provider_api
+ import keystone.conf
+diff --git a/keystone/tests/unit/test_versions.py b/keystone/tests/unit/test_versions.py
+index c12f247de..0f73ceb39 100644
+--- a/keystone/tests/unit/test_versions.py
++++ b/keystone/tests/unit/test_versions.py
+@@ -15,9 +15,9 @@
+ 
+ import copy
+ import functools
++import http.client
+ import random
+ 
+-import http.client
+ from oslo_serialization import jsonutils
+ from testtools import matchers as tt_matchers
+ import webob
+@@ -26,7 +26,6 @@ from keystone.api import discovery
+ from keystone.common import json_home
+ from keystone.tests import unit
+ 
+-
+ v3_MEDIA_TYPES = [
+     {
+         "base": "application/json",
+diff --git a/keystone/tests/unit/tests/test_core.py b/keystone/tests/unit/tests/test_core.py
+index 94bf1fe32..b08363abe 100644
+--- a/keystone/tests/unit/tests/test_core.py
++++ b/keystone/tests/unit/tests/test_core.py
+@@ -21,7 +21,6 @@ from testtools import matchers
+ 
+ from keystone.tests import unit
+ 
+-
+ LOG = log.getLogger(__name__)
+ 
+ 
+diff --git a/keystone/tests/unit/token/test_fernet_provider.py b/keystone/tests/unit/token/test_fernet_provider.py
+index 082898834..01aa07cf6 100644
+--- a/keystone/tests/unit/token/test_fernet_provider.py
++++ b/keystone/tests/unit/token/test_fernet_provider.py
+@@ -37,7 +37,6 @@ from keystone.token import provider
+ from keystone.token.providers import fernet
+ from keystone.token import token_formatters
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/keystone/token/provider.py b/keystone/token/provider.py
+index c0016f327..dfc1aa604 100644
+--- a/keystone/token/provider.py
++++ b/keystone/token/provider.py
+@@ -32,7 +32,6 @@ from keystone.i18n import _
+ from keystone.models import token_model
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ PROVIDERS = provider_api.ProviderAPIs
+diff --git a/keystone/token/providers/fernet/core.py b/keystone/token/providers/fernet/core.py
+index 62ee50cfd..d44853eb3 100644
+--- a/keystone/token/providers/fernet/core.py
++++ b/keystone/token/providers/fernet/core.py
+@@ -12,7 +12,6 @@
+ 
+ import os
+ 
+-
+ from keystone.common import utils as ks_utils
+ import keystone.conf
+ from keystone import exception
+@@ -20,7 +19,6 @@ from keystone.i18n import _
+ from keystone.token.providers import base
+ from keystone.token import token_formatters as tf
+ 
+-
+ CONF = keystone.conf.CONF
+ 
+ 
+diff --git a/keystone/token/token_formatters.py b/keystone/token/token_formatters.py
+index 4de900005..d001ff7f9 100644
+--- a/keystone/token/token_formatters.py
++++ b/keystone/token/token_formatters.py
+@@ -27,7 +27,6 @@ import keystone.conf
+ from keystone import exception
+ from keystone.i18n import _
+ 
+-
+ CONF = keystone.conf.CONF
+ LOG = log.getLogger(__name__)
+ 
+diff --git a/keystone/trust/backends/sql.py b/keystone/trust/backends/sql.py
+index 572749242..0906c3c49 100644
+--- a/keystone/trust/backends/sql.py
++++ b/keystone/trust/backends/sql.py
+@@ -13,7 +13,6 @@
+ # under the License.
+ 
+ from oslo_utils import timeutils
+-
+ import sqlalchemy
+ from sqlalchemy.ext.hybrid import hybrid_property
+ 
+@@ -21,7 +20,6 @@ from keystone.common import sql
+ from keystone import exception
+ from keystone.trust.backends import base
+ 
+-
+ # The maximum number of iterations that will be attempted for optimistic
+ # locking on consuming a limited-use trust.
+ MAXIMUM_CONSUME_ATTEMPTS = 10
+diff --git a/keystone/trust/core.py b/keystone/trust/core.py
+index d2663f228..a4db23334 100644
+--- a/keystone/trust/core.py
++++ b/keystone/trust/core.py
+@@ -21,7 +21,6 @@ from keystone import exception
+ from keystone.i18n import _
+ from keystone import notifications
+ 
+-
+ CONF = keystone.conf.CONF
+ PROVIDERS = provider_api.ProviderAPIs
+ 
+diff --git a/tox.ini b/tox.ini
+index 2ca415c05..d659f828c 100644
+--- a/tox.ini
++++ b/tox.ini
+@@ -87,7 +87,9 @@ commands =
+ passenv = KSTEST_*
+ 
+ [flake8]
+-filename= *.py,keystone-manage
++application-import-names = keystone
++import-order-style = pep8
++filename = *.py,keystone-manage
+ show-source = true
+ enable-extensions = H203,H904
+ # D100: Missing docstring in public module
+-- 
+2.53.0
+
