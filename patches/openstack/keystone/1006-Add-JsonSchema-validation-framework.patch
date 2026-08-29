@@ -1,0 +1,643 @@
+From 04c7bf452228e5261877bde6c7fe21d9f9ac7d83 Mon Sep 17 00:00:00 2001
+From: Artem Goncharov <artem.goncharov@gmail.com>
+Date: Fri, 28 Jun 2024 20:50:35 +0200
+Subject: [PATCH 1006/1026] Add JsonSchema validation framework
+
+A step towards generation of OpenAPI by inspecting service code is
+decorating API methods with jsonschema validators (same as it is done in
+Nova, Cinder, Manila). This adds following features:
+
+- forced and strict request body validation
+- validation of query parameters
+- validation of the response body
+- OpenAPI generation
+
+Change-Id: I7b7d29c1de82aa0bcb332ad9f5c356346479ee37
+(cherry picked from commit a1d3a275b9152f08a6c0e21d80e0b45337ac18de)
+---
+ keystone/api/validation/__init__.py        | 185 ++++++++++++++
+ keystone/api/validation/parameter_types.py |  69 ++++++
+ keystone/api/validation/response_types.py  |  41 +++
+ keystone/api/validation/validators.py      | 276 +++++++++++++++++++++
+ keystone/server/flask/common.py            |   6 +-
+ 5 files changed, 576 insertions(+), 1 deletion(-)
+ create mode 100644 keystone/api/validation/__init__.py
+ create mode 100644 keystone/api/validation/parameter_types.py
+ create mode 100644 keystone/api/validation/response_types.py
+ create mode 100644 keystone/api/validation/validators.py
+
+diff --git a/keystone/api/validation/__init__.py b/keystone/api/validation/__init__.py
+new file mode 100644
+index 000000000..305762aad
+--- /dev/null
++++ b/keystone/api/validation/__init__.py
+@@ -0,0 +1,185 @@
++# Licensed under the Apache License, Version 2.0 (the "License"); you may
++# not use this file except in compliance with the License. You may obtain
++# a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++# License for the specific language governing permissions and limitations
++# under the License.
++
++"""API request/response validating middleware."""
++
++import functools
++import typing as ty
++
++import flask
++from oslo_serialization import jsonutils
++
++from keystone.api.validation import validators
++
++
++def validated(cls):
++    cls._validated = True
++    return cls
++
++
++def _schema_validator(
++    schema: ty.Dict[str, ty.Any],
++    target: ty.Dict[str, ty.Any],
++    args: ty.Any,
++    kwargs: ty.Any,
++    is_body: bool = True,
++):
++    """A helper method to execute JSON Schema Validation.
++
++    This method checks the request version whether matches the specified
++    ``max_version`` and ``min_version``. If the version range matches the
++    request, we validate ``schema`` against ``target``. A failure will result
++    in ``ValidationError`` being raised.
++
++    :param schema: The JSON Schema schema used to validate the target.
++    :param target: The target to be validated by the schema.
++    :param args: Positional arguments which passed into original method.
++    :param kwargs: Keyword arguments which passed into original method.
++    :param is_body: Whether ``target`` is a HTTP request body or not.
++    :returns: None.
++    :raises: ``ValidationError`` if validation fails.
++    """
++    schema_validator = validators._SchemaValidator(schema, is_body=is_body)
++    schema_validator.validate(target)
++
++
++def request_body_schema(
++    schema: ty.Optional[ty.Dict[str, ty.Any]] = None,
++):
++    """Register a schema to validate request body.
++
++    ``schema`` will be used for validating the request body just before the API
++    method is executed.
++
++    :param schema: The JSON Schema schema used to validate the target. If
++        empty value is passed no validation will be performed.
++    :param min_version: A string indicating the minimum API version ``schema``
++        applies against.
++    :param max_version: A string indicating the maximum API version ``schema``
++        applies against.
++    """
++
++    def add_validator(func):
++        @functools.wraps(func)
++        def wrapper(*args, **kwargs):
++            if schema is not None:
++                _schema_validator(
++                    schema,
++                    flask.request.get_json(silent=True, force=True) or {},
++                    args,
++                    kwargs,
++                    is_body=True,
++                )
++            return func(*args, **kwargs)
++
++        wrapper._request_body_schema = schema
++
++        return wrapper
++
++    return add_validator
++
++
++def request_query_schema(
++    schema: ty.Optional[ty.Dict[str, ty.Any]] = None,
++):
++    """Register a schema to validate request query string parameters.
++
++    ``schema`` will be used for validating request query strings just before
++    the API method is executed.
++
++    :param schema: The JSON Schema schema used to validate the target. If
++        empty value is passed no validation will be performed.
++    """
++
++    def add_validator(func):
++        @functools.wraps(func)
++        def wrapper(*args, **kwargs):
++            if schema is not None:
++                # NOTE: The request object is always the second argument.
++                # However, numerous unittests pass in the request object
++                # via kwargs instead so we handle that as well.
++                # TODO(stephenfin): Fix unit tests so we don't have to do this
++                if "req" in kwargs:
++                    req = kwargs["req"]
++                else:
++                    req = flask.request.args
++
++                _schema_validator(
++                    schema,
++                    req,
++                    args,
++                    kwargs,
++                    is_body=True,
++                )
++            return func(*args, **kwargs)
++
++        wrapper._request_query_schema = schema
++
++        return wrapper
++
++    return add_validator
++
++
++def response_body_schema(
++    schema: ty.Optional[ty.Dict[str, ty.Any]] = None,
++):
++    """Register a schema to validate response body.
++
++    ``schema`` will be used for validating the response body just after the API
++    method is executed.
++
++    :param schema: The JSON Schema schema used to validate the target. If
++        empty value is passed no validation will be performed.
++    :param min_version: A string indicating the minimum API version ``schema``
++        applies against.
++    :param max_version: A string indicating the maximum API version ``schema``
++        applies against.
++    """
++
++    def add_validator(func):
++        @functools.wraps(func)
++        def wrapper(*args, **kwargs):
++            response = func(*args, **kwargs)
++
++            if schema is not None:
++                # In Flask it is not uncommon that the method return a tuple of
++                # body and the status code. In the runtime Keystone only return
++                # a body, but some of the used testtools do return a tuple.
++                if isinstance(response, tuple):
++                    _body = response[0]
++                else:
++                    _body = response
++
++                # NOTE(stephenfin): If our response is an object, we need to
++                # serializer and deserialize to convert e.g. date-time
++                # to strings
++                _body = jsonutils.dump_as_bytes(_body)
++
++                if _body == b"":
++                    body = None
++                else:
++                    body = jsonutils.loads(_body)
++
++                _schema_validator(
++                    schema,
++                    body,
++                    args,
++                    kwargs,
++                    is_body=True,
++                )
++            return response
++
++        wrapper._response_body_schema = schema
++
++        return wrapper
++
++    return add_validator
+diff --git a/keystone/api/validation/parameter_types.py b/keystone/api/validation/parameter_types.py
+new file mode 100644
+index 000000000..df0c27097
+--- /dev/null
++++ b/keystone/api/validation/parameter_types.py
+@@ -0,0 +1,69 @@
++# Licensed under the Apache License, Version 2.0 (the "License"); you may
++# not use this file except in compliance with the License. You may obtain
++# a copy of the License at
++#
++#    http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++# License for the specific language governing permissions and limitations
++# under the License.
++
++"""Common parameter types for validating API requests."""
++from typing import Any
++
++name: dict[str, Any] = {
++    "type": "string",
++    "minLength": 1,
++    "maxLength": 255,
++    "pattern": r"[\S]+",
++}
++
++boolean = {
++    "type": ["boolean", "string"],
++    "enum": [
++        True,
++        "True",
++        "TRUE",
++        "true",
++        False,
++        "False",
++        "FALSE",
++        "false",
++    ],
++}
++
++
++domain_id: dict[str, str] = {
++    "type": "string",
++}
++
++parent_id: dict[str, str] = {"type": "string", "format": "uuid"}
++
++_tag_name_property = {
++    "type": "string",
++    "minLength": 1,
++    "maxLength": 255,
++    # NOTE(gagehugo) This pattern is for tags which follows the
++    # guidelines as set by the API-WG, which matches anything that
++    # does not contain a '/' or ','.
++    # https://specs.openstack.org/openstack/api-wg/guidelines/tags.html
++    "pattern": "^[^,/]*$",
++}
++
++tags: dict[str, Any] = {
++    "type": "string",
++    "x-openstack": {
++        # As OpenAPI request parameters this is an array of string serialized
++        # as csv
++        "openapi": {
++            "schema": {
++                "type": "array",
++                "items": _tag_name_property,
++            },
++            "style": "form",
++            "explode": False,
++        }
++    },
++}
+diff --git a/keystone/api/validation/response_types.py b/keystone/api/validation/response_types.py
+new file mode 100644
+index 000000000..243a3634c
+--- /dev/null
++++ b/keystone/api/validation/response_types.py
+@@ -0,0 +1,41 @@
++# Licensed under the Apache License, Version 2.0 (the "License"); you may
++# not use this file except in compliance with the License. You may obtain
++# a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++# License for the specific language governing permissions and limitations
++# under the License.
++
++"""Common field types for validating API responses."""
++from typing import Any
++
++# Common schema for resource `link` attribute
++links: dict[str, Any] = {
++    "type": "object",
++    "properties": {
++        "next": {"type": ["string", "null"], "format": "uri"},
++        "previous": {"type": ["string", "null"], "format": "uri"},
++        "self": {"type": "string", "format": "uri"},
++    },
++    "required": ["self"],
++    "additionalProperties": False,
++}
++
++# Resource `links` attribute schema
++resource_links: dict[str, Any] = {
++    "type": "object",
++    "properties": {"self": {"type": "string", "format": "uri"}},
++    "additionalProperties": False,
++}
++
++truncated: dict[str, Any] = {
++    "type": "boolean",
++    "description": (
++        "Flag indicating that the amount of entities exceeds global "
++        "response limit"
++    ),
++}
+diff --git a/keystone/api/validation/validators.py b/keystone/api/validation/validators.py
+new file mode 100644
+index 000000000..f9df03ce6
+--- /dev/null
++++ b/keystone/api/validation/validators.py
+@@ -0,0 +1,276 @@
++# Licensed under the Apache License, Version 2.0 (the "License"); you may
++# not use this file except in compliance with the License. You may obtain
++# a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++# License for the specific language governing permissions and limitations
++# under the License.
++
++"""Internal implementation of request/response validating middleware."""
++
++import re
++
++import jsonschema
++from jsonschema import exceptions as jsonschema_exc
++from oslo_utils import timeutils
++from oslo_utils import uuidutils
++import webob.exc
++
++from keystone.common import utils
++from keystone import exception
++from keystone.i18n import _
++
++
++def _soft_validate_additional_properties(
++    validator,
++    additional_properties_value,
++    param_value,
++    schema,
++):
++    """Validator function.
++
++    If there are not any properties on the param_value that are not specified
++    in the schema, this will return without any effect. If there are any such
++    extra properties, they will be handled as follows:
++
++    - if the validator passed to the method is not of type "object", this
++      method will return without any effect.
++    - if the 'additional_properties_value' parameter is True, this method will
++      return without any effect.
++    - if the schema has an additionalProperties value of True, the extra
++      properties on the param_value will not be touched.
++    - if the schema has an additionalProperties value of False and there
++      aren't patternProperties specified, the extra properties will be stripped
++      from the param_value.
++    - if the schema has an additionalProperties value of False and there
++      are patternProperties specified, the extra properties will not be
++      touched and raise validation error if pattern doesn't match.
++    """
++    if not (
++        validator.is_type(param_value, "object") or additional_properties_value
++    ):
++        return
++
++    properties = schema.get("properties", {})
++    patterns = "|".join(schema.get("patternProperties", {}))
++    extra_properties = set()
++    for prop in param_value:
++        if prop not in properties:
++            if patterns:
++                if not re.search(patterns, prop):
++                    extra_properties.add(prop)
++            else:
++                extra_properties.add(prop)
++
++    if not extra_properties:
++        return
++
++    if patterns:
++        error = "Additional properties are not allowed (%s %s unexpected)"
++        if len(extra_properties) == 1:
++            verb = "was"
++        else:
++            verb = "were"
++        yield jsonschema_exc.ValidationError(
++            error
++            % (", ".join(repr(extra) for extra in extra_properties), verb)
++        )
++    else:
++        for prop in extra_properties:
++            del param_value[prop]
++
++
++def _validate_string_length(
++    value,
++    entity_name,
++    mandatory=False,
++    min_length=0,
++    max_length=None,
++    remove_whitespaces=False,
++):
++    """Check the length of specified string.
++
++    :param value: the value of the string
++    :param entity_name: the name of the string
++    :mandatory: string is mandatory or not
++    :param min_length: the min_length of the string
++    :param max_length: the max_length of the string
++    :param remove_whitespaces: True if trimming whitespaces is needed else
++        False
++    """
++    if not mandatory and not value:
++        return True
++
++    if mandatory and not value:
++        msg = _("The '%s' can not be None.") % entity_name
++        raise webob.exc.HTTPBadRequest(explanation=msg)
++
++    if remove_whitespaces:
++        value = value.strip()
++
++    utils.check_string_length(
++        value, entity_name, min_length=min_length, max_length=max_length
++    )
++
++
++@jsonschema.FormatChecker.cls_checks("date-time")
++def _validate_datetime_format(instance: object) -> bool:
++    # format checks constrain to the relevant primitive type
++    # https://github.com/OAI/OpenAPI-Specification/issues/3148
++    if not isinstance(instance, str):
++        return True
++    try:
++        timeutils.parse_isotime(instance)
++    except ValueError:
++        return False
++    else:
++        return True
++
++
++@jsonschema.FormatChecker.cls_checks("uuid")
++def _validate_uuid_format(instance: object) -> bool:
++    # format checks constrain to the relevant primitive type
++    # https://github.com/OAI/OpenAPI-Specification/issues/3148
++    if not isinstance(instance, str):
++        return True
++
++    return uuidutils.is_uuid_like(instance)
++
++
++class FormatChecker(jsonschema.FormatChecker):
++    """A FormatChecker can output the message from cause exception.
++
++    We need understandable validation errors messages for users. When a
++    custom checker has an exception, the FormatChecker will output a
++    readable message provided by the checker.
++    """
++
++    def check(self, param_value, format):
++        """Check whether the param_value conforms to the given format.
++
++        :param param_value: the param_value to check
++        :type: any primitive type (str, number, bool)
++        :param str format: the format that param_value should conform to
++        :raises: :exc:`FormatError` if param_value does not conform to format
++        """
++        if format not in self.checkers:
++            return
++
++        # For safety reasons custom checkers can be registered with
++        # allowed exception types. Anything else will fall into the
++        # default formatter.
++        func, raises = self.checkers[format]
++        result, cause = None, None
++
++        try:
++            result = func(param_value)
++        except raises as e:
++            cause = e
++        if not result:
++            msg = f"{param_value!r} is not a {format!r}"
++            raise jsonschema_exc.FormatError(msg, cause=cause)
++
++
++class _SchemaValidator:
++    """A validator class.
++
++    This class is changed from Draft202012Validator to validate minimum/maximum
++    value of a string number(e.g. '10').
++
++    In addition, FormatCheckers are added for checking data formats which are
++    common in the Manila API.
++    """
++
++    validator = None
++    validator_org = jsonschema.Draft202012Validator
++
++    def __init__(
++        self, schema, relax_additional_properties=False, is_body=True
++    ):
++        self.is_body = is_body
++        validators = {
++            "minimum": self._validate_minimum,
++            "maximum": self._validate_maximum,
++        }
++        if relax_additional_properties:
++            validators["additionalProperties"] = (
++                _soft_validate_additional_properties
++            )
++
++        validator_cls = jsonschema.validators.extend(
++            self.validator_org, validators
++        )
++        format_checker = FormatChecker()
++        self.validator = validator_cls(schema, format_checker=format_checker)
++
++    def validate(self, *args, **kwargs):
++        try:
++            self.validator.validate(*args, **kwargs)
++        except jsonschema.ValidationError as ex:
++            if len(ex.path) > 0:
++                if self.is_body:
++                    # NOTE: For consistency across OpenStack services, this
++                    # error message has been written in a similar format as
++                    # WSME errors.
++                    detail = _(
++                        "Invalid input for field/attribute %(path)s. "
++                        "Value: %(value)s. %(message)s"
++                    ) % {
++                        "path": ex.path.pop(),
++                        "value": ex.instance,
++                        "message": ex.message,
++                    }
++                else:
++                    # NOTE: We use 'ex.path.popleft()' instead of
++                    # 'ex.path.pop()'. This is due to the structure of query
++                    # parameters which is a dict with key as name and value is
++                    # list. As such, the first item in the 'ex.path' is the key
++                    # and second item is the index of list in the value. We
++                    # need the key as the parameter name in the error message
++                    # so we pop the first value out of 'ex.path'.
++                    detail = _(
++                        "Invalid input for query parameters %(path)s. "
++                        "Value: %(value)s. %(message)s"
++                    ) % {
++                        "path": ex.path.popleft(),
++                        "value": ex.instance,
++                        "message": ex.message,
++                    }
++            else:
++                detail = ex.message
++            raise exception.SchemaValidationError(detail=detail)
++        except TypeError as ex:
++            # NOTE: If passing non string value to patternProperties parameter,
++            # TypeError happens. Here is for catching the TypeError.
++            detail = str(ex)
++            raise exception.SchemaValidationError(detail=detail)
++
++    def _number_from_str(self, param_value):
++        try:
++            value = int(param_value)
++        except (ValueError, TypeError):
++            try:
++                value = float(param_value)
++            except (ValueError, TypeError):
++                return None
++        return value
++
++    def _validate_minimum(self, validator, minimum, param_value, schema):
++        param_value = self._number_from_str(param_value)
++        if param_value is None:
++            return
++        return self.validator_org.VALIDATORS["minimum"](
++            validator, minimum, param_value, schema
++        )
++
++    def _validate_maximum(self, validator, maximum, param_value, schema):
++        param_value = self._number_from_str(param_value)
++        if param_value is None:
++            return
++        return self.validator_org.VALIDATORS["maximum"](
++            validator, maximum, param_value, schema
++        )
+diff --git a/keystone/server/flask/common.py b/keystone/server/flask/common.py
+index 4c1b506fd..ccc417a12 100644
+--- a/keystone/server/flask/common.py
++++ b/keystone/server/flask/common.py
+@@ -165,7 +165,11 @@ def _assert_rbac_enforcement_called(resp):
+     g = flask.g
+     # NOTE(morgan): OPTIONS is a special case and is handled by flask
+     # internally. We should never be enforcing on OPTIONS calls.
+-    if flask.request.method != 'OPTIONS':
++    # Request validation could abort even before we start processing. It
++    # makes no sense to enfore RBAC
++    if flask.request.method != 'OPTIONS' and resp.status_code not in [
++        http.client.BAD_REQUEST
++    ]:
+         assert getattr(  # nosec
+             g, enforcer._ENFORCEMENT_CHECK_ATTR, False
+         ), msg  # nosec
+-- 
+2.53.0
+
