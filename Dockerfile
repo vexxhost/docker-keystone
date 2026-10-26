@@ -25,8 +25,8 @@ EOF
 ARG MOD_AUTH_OPENIDC_VERSION=2.4.18.1
 # NOTE: Always use compatible version of liboauth2 and mod_oauth2,
 #       otherwise mod_oauth2 will fail to load due to missing shared library.
-ARG LIBOAUTH2_VERSION=2.1.1
-ARG MOD_OAUTH2_VERSION=4.1.0
+ARG LIBOAUTH2_VERSION=2.4.0
+ARG MOD_OAUTH2_VERSION=4.2.0
 ARG TARGETARCH
 RUN <<EOF bash -xe
 # TODO(mnaser): mod_auth_openidc and mod_oauth2 does not have aarch64 builds
@@ -54,5 +54,7 @@ rm -rfv /var/lib/apt/lists/* \
     liboauth2_${LIBOAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb \
     liboauth2-apache_${LIBOAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb \
     libapache2-mod-oauth2_${MOD_OAUTH2_VERSION}-1.$(lsb_release -sc)_${TARGETARCH}.deb
+# Load all enabled modules to catch incompatible shared-library versions.
+apache2ctl configtest
 EOF
 COPY --from=build --link /var/lib/openstack /var/lib/openstack
