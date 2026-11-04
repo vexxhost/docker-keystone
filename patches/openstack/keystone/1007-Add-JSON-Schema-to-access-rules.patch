@@ -1,0 +1,362 @@
+From 69e04415126a33c340fb7c0e5fdcd577e56b49aa Mon Sep 17 00:00:00 2001
+From: Antonia Gaete <antoniagaete@osuosl.org>
+Date: Fri, 26 Jul 2024 14:49:15 +0000
+Subject: [PATCH 1007/1024] Add JSON Schema to `access rules`
+
+Decorate access_rules resource with JSONSchema validation decorators.
+
+Depends-On: https://review.opendev.org/c/openstack/codegenerator/+/926419
+Change-Id: I91942ca21c14ac323b341d9ec869da59ca88455b
+(cherry picked from commit 85c759ebdff2bcb11eb2b37f33a0a6bc822160bc)
+---
+ keystone/api/users.py                         |  17 ++-
+ keystone/api/validation/parameter_types.py    |   7 ++
+ keystone/application_credential/schema.py     | 109 ++++++++++++++----
+ .../unit/test_v3_application_credential.py    | 100 ++++++++++++++++
+ 4 files changed, 207 insertions(+), 26 deletions(-)
+
+diff --git a/keystone/api/users.py b/keystone/api/users.py
+index 58568e262..f39978baf 100644
+--- a/keystone/api/users.py
++++ b/keystone/api/users.py
+@@ -22,12 +22,13 @@ from oslo_serialization import jsonutils
+ from werkzeug import exceptions
+ 
+ from keystone.api._shared import json_home_relations
++from keystone.api import validation
+ from keystone.application_credential import schema as app_cred_schema
+ from keystone.common import json_home
+ from keystone.common import provider_api
+ from keystone.common import rbac_enforcer
+ from keystone.common import utils
+-from keystone.common import validation
++from keystone.common import validation as ks_validation
+ import keystone.conf
+ from keystone import exception as ks_exception
+ from keystone.i18n import _
+@@ -253,7 +254,7 @@ class UserResource(ks_flask.ResourceBase):
+         ENFORCER.enforce_call(
+             action='identity:create_user', target_attr=target
+         )
+-        validation.lazy_validate(schema.user_create, user_data)
++        ks_validation.lazy_validate(schema.user_create, user_data)
+         user_data = self._normalize_dict(user_data)
+         user_data = self._normalize_domain_id(user_data)
+         ref = PROVIDERS.identity_api.create_user(
+@@ -272,7 +273,7 @@ class UserResource(ks_flask.ResourceBase):
+         )
+         PROVIDERS.identity_api.get_user(user_id)
+         user_data = self.request_body_json.get('user', {})
+-        validation.lazy_validate(schema.user_update, user_data)
++        ks_validation.lazy_validate(schema.user_update, user_data)
+         self._require_matching_id(user_data)
+         ref = PROVIDERS.identity_api.update_user(
+             user_id, user_data, initiator=self.audit_initiator
+@@ -301,7 +302,7 @@ class UserChangePasswordResource(ks_flask.ResourceBase):
+     @ks_flask.unenforced_api
+     def post(self, user_id):
+         user_data = self.request_body_json.get('user', {})
+-        validation.lazy_validate(schema.password_change, user_data)
++        ks_validation.lazy_validate(schema.password_change, user_data)
+ 
+         try:
+             PROVIDERS.identity_api.change_password(
+@@ -676,7 +677,7 @@ class UserAppCredListCreateResource(ks_flask.ResourceBase):
+         app_cred_data = self.request_body_json.get(
+             'application_credential', {}
+         )
+-        validation.lazy_validate(
++        ks_validation.lazy_validate(
+             app_cred_schema.application_credential_create, app_cred_data
+         )
+         token = self.auth_context['token']
+@@ -766,6 +767,8 @@ class UserAccessRuleListResource(ks_flask.ResourceBase):
+     collection_key = 'access_rules'
+     member_key = 'access_rule'
+ 
++    @validation.request_query_schema(app_cred_schema.index_request_query)
++    @validation.response_body_schema(app_cred_schema.rule_index_response_body)
+     def get(self, user_id):
+         """List access rules for user.
+ 
+@@ -792,6 +795,8 @@ class UserAccessRuleGetDeleteResource(ks_flask.ResourceBase):
+     collection_key = 'access_rules'
+     member_key = 'access_rule'
+ 
++    @validation.request_query_schema(app_cred_schema.rule_show_request_query)
++    @validation.response_body_schema(app_cred_schema.rule_show_response_body)
+     def get(self, user_id, access_rule_id):
+         """Get access rule resource.
+ 
+@@ -806,6 +811,8 @@ class UserAccessRuleGetDeleteResource(ks_flask.ResourceBase):
+         )
+         return self.wrap_member(ref)
+ 
++    @validation.request_body_schema(None)
++    @validation.response_body_schema(None)
+     def delete(self, user_id, access_rule_id):
+         """Delete access rule resource.
+ 
+diff --git a/keystone/api/validation/parameter_types.py b/keystone/api/validation/parameter_types.py
+index 5da1c6448..561881186 100644
+--- a/keystone/api/validation/parameter_types.py
++++ b/keystone/api/validation/parameter_types.py
+@@ -69,3 +69,10 @@ tags: dict[str, Any] = {
+         }
+     },
+ }
++
++id_string: dict[str, Any] = {
++    "type": "string",
++    "minLength": 1,
++    "maxLength": 64,
++    "pattern": r"^[a-zA-Z0-9-]+$",
++}
+diff --git a/keystone/application_credential/schema.py b/keystone/application_credential/schema.py
+index d2f04be95..7bb00c908 100644
+--- a/keystone/application_credential/schema.py
++++ b/keystone/application_credential/schema.py
+@@ -12,8 +12,12 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
++from typing import Any
++
++from keystone.api.validation import parameter_types
++from keystone.api.validation import response_types
+ from keystone.common import validation
+-from keystone.common.validation import parameter_types
++from keystone.common.validation import parameter_types as ks_parameter_types
+ 
+ _role_properties = {
+     'type': 'array',
+@@ -29,35 +33,98 @@ _role_properties = {
+     },
+ }
+ 
++# Individual properties of 'Access Rule'
+ _access_rules_properties = {
+-    'type': 'array',
+-    'items': {
+-        'type': 'object',
+-        'properties': {
+-            'path': {
+-                'type': 'string',
+-                'minLength': 0,
+-                'maxLength': 225,
+-                'pattern': r'^\/.*',
+-            },
+-            'method': {
+-                'type': 'string',
+-                'pattern': r'^(POST|GET|HEAD|PATCH|PUT|DELETE)$',
+-            },
+-            'service': parameter_types.id_string,
+-            'id': parameter_types.id_string,
++    "path": {
++        "type": "string",
++        "minLength": 0,
++        "maxLength": 225,
++        "pattern": r'^/\.*',
++        "description": (
++            "The API path that the application credential is "
++            "permitted to access."
++        ),
++    },
++    "service": {
++        **parameter_types.id_string,
++        "description": (
++            "The service type identifier for the service that the application"
++            " credential is permitted to access. Must be a service type that"
++            " is listed in the service catalog and not a code name for a"
++            " service."
++        ),
++    },
++    "method": {
++        "type": "string",
++        "enum": ["DELETE", "GET", "HEAD", "PATCH", "POST", "PUT"],
++        "description": (
++            "The request method that the application credential is "
++            "permitted to use for a given API endpoint."
++        ),
++    },
++}
++
++# Common schema of the `Access Rule` resource
++access_rule_schema: dict[str, Any] = {
++    "type": "object",
++    "description": "An access rule object.",
++    "properties": {
++        "id": {
++            "type": "string",
++            "readOnly": True,
++            "description": "The UUID of the access rule",
+         },
+-        'additionalProperties': False,
++        "links": response_types.resource_links,
++        **_access_rules_properties,
+     },
++    "additionalProperties": False,
++}
++
++# Query parameters of the `/users/{user_d}/access_rules` API
++index_request_query: dict[str, Any] = {
++    "type": "object",
++    "properties": {},
++    "additionalProperties": False,
++}
++
++# Response of the `/access_rules` API
++rule_index_response_body: dict[str, Any] = {
++    "type": "object",
++    "properties": {
++        "access_rules": {
++            "type": "array",
++            "items": access_rule_schema,
++            "description": "A list of access_rule objects.",
++        },
++        "links": response_types.links,
++    },
++    "additionalProperties": False,
++}
++
++# /access/rules/{access_rule_id}
++# GET request query parameters
++rule_show_request_query: dict[str, Any] = {
++    "type": "object",
++    "properties": {},
++    "additionalProperties": False,
++}
++
++# Response of `/access_rules/{access_rule_id}` API returning
++# single access rule
++rule_show_response_body: dict[str, Any] = {
++    "type": "object",
++    "description": "An access rule object.",
++    "properties": {"access_rule": access_rule_schema},
++    "additionalProperties": False,
+ }
+ 
+ _application_credential_properties = {
+-    'name': parameter_types.name,
+-    'description': validation.nullable(parameter_types.description),
++    'name': ks_parameter_types.name,
++    'description': validation.nullable(ks_parameter_types.description),
+     'secret': {'type': ['null', 'string']},
+     'expires_at': {'type': ['null', 'string']},
+     'roles': _role_properties,
+-    'unrestricted': parameter_types.boolean,
++    'unrestricted': ks_parameter_types.boolean,
+     'access_rules': _access_rules_properties,
+ }
+ 
+diff --git a/keystone/tests/unit/test_v3_application_credential.py b/keystone/tests/unit/test_v3_application_credential.py
+index d1d78e2bc..3c154261f 100644
+--- a/keystone/tests/unit/test_v3_application_credential.py
++++ b/keystone/tests/unit/test_v3_application_credential.py
+@@ -684,3 +684,103 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
+                 expected_status_code=http.client.METHOD_NOT_ALLOWED,
+                 headers={'X-Auth-Token': token},
+             )
++
++    def test_list_access_rules(self):
++        access_rules: list[dict[str, str]] = [
++            {"service": "foo", "method": "GET", "path": "/bar"}
++        ]
++        with self.test_client() as c:
++            roles = [{'id': self.role_id}]
++            app_cred_body = self._app_cred_body(
++                roles=roles, access_rules=access_rules
++            )
++            token = self.get_scoped_token()
++            c.post(
++                f"/v3/users/{self.user_id}/application_credentials",
++                json=app_cred_body,
++                expected_status_code=http.client.CREATED,
++                headers={"X-Auth-Token": token},
++            )
++            # Invoke GET access_rules and trigger internal validation
++            r = c.get(
++                f"/v3/users/{self.user_id}/access_rules",
++                expected_status_code=http.client.OK,
++                headers={"X-Auth-Token": token},
++            )
++            ar = r.json["access_rules"]
++            self.assertEqual(access_rules[0]["method"], ar[0]["method"])
++
++    def test_list_access_rules_wrong_qp(self):
++        with self.test_client() as c:
++            token = self.get_scoped_token()
++            # Invoke GET access_rules with unsupported query parameters and
++            # trigger internal validation
++            c.get(
++                f"/v3/users/{self.user_id}/access_rules?user_id=foo",
++                expected_status_code=http.client.BAD_REQUEST,
++                headers={"X-Auth-Token": token},
++            )
++
++    def test_show_access_rule(self):
++        access_rules: list[dict[str, str]] = [
++            {"service": "foo", "method": "GET", "path": "/bar"}
++        ]
++        with self.test_client() as c:
++            roles = [{'id': self.role_id}]
++            app_cred_body = self._app_cred_body(
++                roles=roles, access_rules=access_rules
++            )
++            token = self.get_scoped_token()
++            resp = c.post(
++                f"/v3/users/{self.user_id}/application_credentials",
++                json=app_cred_body,
++                expected_status_code=http.client.CREATED,
++                headers={"X-Auth-Token": token},
++            )
++            access_rule_id = resp.json["application_credential"][
++                "access_rules"
++            ][0]["id"]
++            # Invoke GET access_rules/{id} and trigger internal validation
++            c.get(
++                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}",
++                expected_status_code=http.client.OK,
++                headers={"X-Auth-Token": token},
++            )
++            c.get(
++                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}"
++                "?foo=bar",
++                expected_status_code=http.client.BAD_REQUEST,
++                headers={"X-Auth-Token": token},
++            )
++
++    def test_delete_access_rule(self):
++        access_rules: list[dict[str, str]] = [
++            {"service": "foo", "method": "GET", "path": "/bar"}
++        ]
++        with self.test_client() as c:
++            roles = [{'id': self.role_id}]
++            app_cred_body = self._app_cred_body(
++                roles=roles, access_rules=access_rules
++            )
++            token = self.get_scoped_token()
++            resp = c.post(
++                f"/v3/users/{self.user_id}/application_credentials",
++                json=app_cred_body,
++                expected_status_code=http.client.CREATED,
++                headers={"X-Auth-Token": token},
++            )
++            app_cred: dict = resp.json["application_credential"]
++            access_rule_id = app_cred["access_rules"][0]["id"]
++            c.delete(
++                f"/v3/users/{self.user_id}/application_credentials"
++                f"/{app_cred['id']}",
++                json=app_cred_body,
++                expected_status_code=http.client.NO_CONTENT,
++                headers={"X-Auth-Token": token},
++            )
++            # Invoke GET access_rules/{id} and trigger internal validation
++            c.delete(
++                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}",
++                expected_status_code=http.client.NO_CONTENT,
++                headers={"X-Auth-Token": token},
++            )
+-- 
+2.53.0
+
