@@ -1,0 +1,742 @@
+From 2d04665264a861b4058a0601743827c295f958dd Mon Sep 17 00:00:00 2001
+From: Antonia Gaete <antoniagaete@osuosl.org>
+Date: Tue, 24 Sep 2024 09:55:30 -0700
+Subject: [PATCH 1023/1026] Add JSON schema to `trust` and validation
+ decorators to trust resource.
+
+Change-Id: I5f29f28ee98480e37680f02010fbc75e219c9423
+(cherry picked from commit e80bae20e08ab27b5ab49f3061531633bc3c2cdb)
+---
+ keystone/api/trusts.py                 | 155 ++++++++++-------
+ keystone/tests/unit/test_v3_trust.py   |   4 +-
+ keystone/tests/unit/test_validation.py | 138 +++++++++------
+ keystone/trust/schema.py               | 224 ++++++++++++++++++++++---
+ 4 files changed, 377 insertions(+), 144 deletions(-)
+
+diff --git a/keystone/api/trusts.py b/keystone/api/trusts.py
+index 52c931bc9..2e827eb85 100644
+--- a/keystone/api/trusts.py
++++ b/keystone/api/trusts.py
+@@ -23,13 +23,13 @@ from oslo_log import log
+ from oslo_policy import _checks as op_checks
+ 
+ from keystone.api._shared import json_home_relations
++from keystone.api import validation
+ from keystone.common import context
+ from keystone.common import json_home
+ from keystone.common import provider_api
+ from keystone.common import rbac_enforcer
+ from keystone.common.rbac_enforcer import policy
+ from keystone.common import utils
+-from keystone.common import validation
+ from keystone import exception
+ from keystone.i18n import _
+ from keystone.server import flask as ks_flask
+@@ -100,13 +100,7 @@ def _normalize_trust_roles(trust):
+     }
+ 
+ 
+-class TrustResource(ks_flask.ResourceBase):
+-    collection_key = 'trusts'
+-    member_key = 'trust'
+-    api_prefix = '/OS-TRUST'
+-    json_home_resource_rel_func = _build_resource_relation
+-    json_home_parameter_rel_func = _build_parameter_relation
+-
++class TrustResourceBase(ks_flask.ResourceBase):
+     def _check_unrestricted(self):
+         if self.oslo_context.is_admin:
+             return
+@@ -119,6 +113,14 @@ class TrustResource(ks_flask.ResourceBase):
+                 )
+                 raise exception.ForbiddenAction(action=action)
+ 
++
++class TrustsResource(TrustResourceBase):
++    collection_key = 'trusts'
++    member_key = 'trust'
++    api_prefix = '/OS-TRUST'
++    json_home_resource_rel_func = _build_resource_relation
++    json_home_parameter_rel_func = _build_parameter_relation
++
+     def _find_redelegated_trust(self):
+         # Check if delegated via trust
+         redelegated_trust = None
+@@ -177,49 +179,13 @@ class TrustResource(ks_flask.ResourceBase):
+                 )
+         return roles
+ 
+-    def _get_trust(self, trust_id):
+-        ENFORCER.enforce_call(
+-            action='identity:get_trust',
+-            build_target=_build_trust_target_enforcement,
+-        )
+-
+-        # NOTE(cmurphy) look up trust before doing is_admin authorization - to
+-        # maintain the API contract, we expect a missing trust to raise a 404
+-        # before we get to enforcement (lp#1840288)
+-        trust = PROVIDERS.trust_api.get_trust(trust_id)
+-
+-        if self.oslo_context.is_admin:
+-            # policies are not loaded for the is_admin context, so need to
+-            # block access here
+-            raise exception.ForbiddenAction(
+-                action=_('Requested user has no relation to this trust')
+-            )
+-
+-        # NOTE(cmurphy) As of Train, the default policies enforce the
+-        # identity:get_trust rule. However, in case the
+-        # identity:get_trust rule has been locally overridden by the
+-        # default that would have been produced by the sample config, we need
+-        # to enforce it again and warn that the behavior is changing.
+-        rules = policy._ENFORCER._enforcer.rules.get('identity:get_trust')
+-        # rule check_str is ""
+-        if isinstance(rules, op_checks.TrueCheck):
+-            LOG.warning(
+-                "The policy check string for rule \"identity:get_trust\" "
+-                "has been overridden to \"always true\". In the next release, "
+-                "this will cause the"
+-                "\"identity:get_trust\" action to "
+-                "be fully permissive as hardcoded enforcement will be "
+-                "removed. To correct this issue, either stop overriding the "
+-                "\"identity:get_trust\" rule in config to accept the "
+-                "defaults, or explicitly set a rule that is not empty."
+-            )
+-            _trustor_trustee_only(trust)
+-
+-        _normalize_trust_expires_at(trust)
+-        _normalize_trust_roles(trust)
+-        return self.wrap_member(trust)
++    @validation.request_query_schema(schema.trust_index_request_query)
++    @validation.response_body_schema(schema.trust_index_response_body)
++    def get(self):
++        """Dispatch for LIST trusts.
+ 
+-    def _list_trusts(self):
++        GET /v3/OS-TRUST/trusts
++        """
+         trustor_user_id = flask.request.args.get('trustor_user_id')
+         trustee_user_id = flask.request.args.get('trustee_user_id')
+         if trustor_user_id:
+@@ -285,21 +251,17 @@ class TrustResource(ks_flask.ResourceBase):
+ 
+         return self.wrap_collection(trusts)
+ 
+-    def get(self, trust_id=None):
+-        """Dispatch for GET/HEAD or LIST trusts."""
+-        if trust_id is not None:
+-            return self._get_trust(trust_id=trust_id)
+-        else:
+-            return self._list_trusts()
+-
++    @validation.request_body_schema(schema.trust_create_request_body)
++    @validation.response_body_schema(schema.trust_response_body)
+     def post(self):
+         """Create a new trust.
+ 
+         The User creating the trust must be the trustor.
++
++        POST /v3/OS-TRUST/trusts
+         """
+         ENFORCER.enforce_call(action='identity:create_trust')
+         trust = self.request_body_json.get('trust', {})
+-        validation.lazy_validate(schema.trust_create, trust)
+         self._check_unrestricted()
+ 
+         if trust.get('project_id') and not trust.get('roles'):
+@@ -332,7 +294,67 @@ class TrustResource(ks_flask.ResourceBase):
+         _normalize_trust_roles(return_trust)
+         return self.wrap_member(return_trust), http.client.CREATED
+ 
++
++class TrustResource(TrustResourceBase):
++    collection_key = 'trusts'
++    member_key = 'trust'
++    api_prefix = '/OS-TRUST'
++    json_home_resource_rel_func = _build_resource_relation
++    json_home_parameter_rel_func = _build_parameter_relation
++
++    @validation.request_query_schema(schema.trust_request_query)
++    @validation.response_body_schema(schema.trust_response_body)
++    def get(self, trust_id):
++        """Get trust.
++
++        GET /v3/OS-TRUST/trusts/{trust_id}
++        """
++        ENFORCER.enforce_call(
++            action='identity:get_trust',
++            build_target=_build_trust_target_enforcement,
++        )
++
++        # NOTE(cmurphy) look up trust before doing is_admin authorization - to
++        # maintain the API contract, we expect a missing trust to raise a 404
++        # before we get to enforcement (lp#1840288)
++        trust = PROVIDERS.trust_api.get_trust(trust_id)
++
++        if self.oslo_context.is_admin:
++            # policies are not loaded for the is_admin context, so need to
++            # block access here
++            raise exception.ForbiddenAction(
++                action=_('Requested user has no relation to this trust')
++            )
++
++        # NOTE(cmurphy) As of Train, the default policies enforce the
++        # identity:get_trust rule. However, in case the
++        # identity:get_trust rule has been locally overridden by the
++        # default that would have been produced by the sample config, we need
++        # to enforce it again and warn that the behavior is changing.
++        rules = policy._ENFORCER._enforcer.rules.get('identity:get_trust')
++        # rule check_str is ""
++        if isinstance(rules, op_checks.TrueCheck):
++            LOG.warning(
++                "The policy check string for rule \"identity:get_trust\" "
++                "has been overridden to \"always true\". In the next release, "
++                "this will cause the"
++                "\"identity:get_trust\" action to "
++                "be fully permissive as hardcoded enforcement will be "
++                "removed. To correct this issue, either stop overriding the "
++                "\"identity:get_trust\" rule in config to accept the "
++                "defaults, or explicitly set a rule that is not empty."
++            )
++            _trustor_trustee_only(trust)
++
++        _normalize_trust_expires_at(trust)
++        _normalize_trust_roles(trust)
++        return self.wrap_member(trust)
++
+     def delete(self, trust_id):
++        """Delete trust.
++
++        DELETE /v3/OS-TRUST/trusts/{trust_id}
++        """
+         ENFORCER.enforce_call(
+             action='identity:delete_trust',
+             build_target=_build_trust_target_enforcement,
+@@ -484,8 +506,23 @@ class RoleForTrustResource(flask_restful.Resource):
+ class TrustAPI(ks_flask.APIBase):
+     _name = 'trusts'
+     _import_name = __name__
+-    resources = [TrustResource]
+     resource_mapping = [
++        ks_flask.construct_resource_map(
++            resource=TrustsResource,
++            url='/trusts',
++            resource_kwargs={},
++            rel="trusts",
++            path_vars=None,
++            resource_relation_func=_build_resource_relation,
++        ),
++        ks_flask.construct_resource_map(
++            resource=TrustResource,
++            url='/trusts/<string:trust_id>',
++            resource_kwargs={},
++            rel="trust",
++            path_vars={'trust_id': TRUST_ID_PARAMETER_RELATION},
++            resource_relation_func=_build_resource_relation,
++        ),
+         ks_flask.construct_resource_map(
+             resource=RolesForTrustListResource,
+             url='/trusts/<string:trust_id>/roles',
+diff --git a/keystone/tests/unit/test_v3_trust.py b/keystone/tests/unit/test_v3_trust.py
+index 96496f57f..6d39bbc42 100644
+--- a/keystone/tests/unit/test_v3_trust.py
++++ b/keystone/tests/unit/test_v3_trust.py
+@@ -44,12 +44,10 @@ class TestTrustOperations(test_v3.RestfulTestCase):
+         self.trustee_user_id = self.trustee_user['id']
+ 
+     def test_create_trust_bad_request(self):
+-        # The server returns a 403 Forbidden rather than a 400 Bad Request, see
+-        # bug 1133435
+         self.post(
+             '/OS-TRUST/trusts',
+             body={'trust': {}},
+-            expected_status=http.client.FORBIDDEN,
++            expected_status=http.client.BAD_REQUEST,
+         )
+ 
+     def test_create_trust_with_invalid_expiration_fails(self):
+diff --git a/keystone/tests/unit/test_validation.py b/keystone/tests/unit/test_validation.py
+index c51aca857..3d9a43f9d 100644
+--- a/keystone/tests/unit/test_validation.py
++++ b/keystone/tests/unit/test_validation.py
+@@ -1920,36 +1920,42 @@ class TrustValidationTestCase(unit.BaseTestCase):
+     def setUp(self):
+         super().setUp()
+ 
+-        create = trust_schema.trust_create
++        create = trust_schema.trust_create_request_body
+         self.create_trust_validator = validators.SchemaValidator(create)
+ 
+     def test_validate_trust_succeeds(self):
+         """Test that we can validate a trust request."""
+         request_to_validate = {
+-            'trustor_user_id': uuid.uuid4().hex,
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'impersonation': False,
++            'trust': {
++                'trustor_user_id': uuid.uuid4().hex,
++                'trustee_user_id': uuid.uuid4().hex,
++                'impersonation': False,
++            }
+         }
+         self.create_trust_validator.validate(request_to_validate)
+ 
+     def test_validate_trust_with_all_parameters_succeeds(self):
+         """Test that we can validate a trust request with all parameters."""
+         request_to_validate = {
+-            'trustor_user_id': uuid.uuid4().hex,
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'impersonation': False,
+-            'project_id': uuid.uuid4().hex,
+-            'roles': [{'id': uuid.uuid4().hex}, {'id': uuid.uuid4().hex}],
+-            'expires_at': 'some timestamp',
+-            'remaining_uses': 2,
++            'trust': {
++                'trustor_user_id': uuid.uuid4().hex,
++                'trustee_user_id': uuid.uuid4().hex,
++                'impersonation': False,
++                'project_id': uuid.uuid4().hex,
++                'roles': [{'id': uuid.uuid4().hex}, {'id': uuid.uuid4().hex}],
++                'expires_at': 'some timestamp',
++                'remaining_uses': 2,
++            }
+         }
+         self.create_trust_validator.validate(request_to_validate)
+ 
+     def test_validate_trust_without_trustor_id_fails(self):
+         """Validate trust request fails without `trustor_id`."""
+         request_to_validate = {
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'impersonation': False,
++            'trust': {
++                'trustee_user_id': uuid.uuid4().hex,
++                'impersonation': False,
++            }
+         }
+         self.assertRaises(
+             exception.SchemaValidationError,
+@@ -1960,8 +1966,10 @@ class TrustValidationTestCase(unit.BaseTestCase):
+     def test_validate_trust_without_trustee_id_fails(self):
+         """Validate trust request fails without `trustee_id`."""
+         request_to_validate = {
+-            'trusor_user_id': uuid.uuid4().hex,
+-            'impersonation': False,
++            'trust': {
++                'trusor_user_id': uuid.uuid4().hex,
++                'impersonation': False,
++            }
+         }
+         self.assertRaises(
+             exception.SchemaValidationError,
+@@ -1972,8 +1980,10 @@ class TrustValidationTestCase(unit.BaseTestCase):
+     def test_validate_trust_without_impersonation_fails(self):
+         """Validate trust request fails without `impersonation`."""
+         request_to_validate = {
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'trustor_user_id': uuid.uuid4().hex,
++            'trust': {
++                'trustee_user_id': uuid.uuid4().hex,
++                'trustor_user_id': uuid.uuid4().hex,
++            }
+         }
+         self.assertRaises(
+             exception.SchemaValidationError,
+@@ -1984,23 +1994,27 @@ class TrustValidationTestCase(unit.BaseTestCase):
+     def test_validate_trust_with_extra_parameters_succeeds(self):
+         """Test that we can validate a trust request with extra parameters."""
+         request_to_validate = {
+-            'trustor_user_id': uuid.uuid4().hex,
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'impersonation': False,
+-            'project_id': uuid.uuid4().hex,
+-            'roles': [{'id': uuid.uuid4().hex}, {'id': uuid.uuid4().hex}],
+-            'expires_at': 'some timestamp',
+-            'remaining_uses': 2,
+-            'extra': 'something extra!',
++            'trust': {
++                'trustor_user_id': uuid.uuid4().hex,
++                'trustee_user_id': uuid.uuid4().hex,
++                'impersonation': False,
++                'project_id': uuid.uuid4().hex,
++                'roles': [{'id': uuid.uuid4().hex}, {'id': uuid.uuid4().hex}],
++                'expires_at': 'some timestamp',
++                'remaining_uses': 2,
++                'extra': 'something extra!',
++            }
+         }
+         self.create_trust_validator.validate(request_to_validate)
+ 
+     def test_validate_trust_with_invalid_impersonation_fails(self):
+         """Validate trust request with invalid `impersonation` fails."""
+         request_to_validate = {
+-            'trustor_user_id': uuid.uuid4().hex,
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'impersonation': 2,
++            'trust': {
++                'trustor_user_id': uuid.uuid4().hex,
++                'trustee_user_id': uuid.uuid4().hex,
++                'impersonation': 2,
++            }
+         }
+         self.assertRaises(
+             exception.SchemaValidationError,
+@@ -2011,39 +2025,47 @@ class TrustValidationTestCase(unit.BaseTestCase):
+     def test_validate_trust_with_null_remaining_uses_succeeds(self):
+         """Validate trust request with null `remaining_uses`."""
+         request_to_validate = {
+-            'trustor_user_id': uuid.uuid4().hex,
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'impersonation': False,
+-            'remaining_uses': None,
++            'trust': {
++                'trustor_user_id': uuid.uuid4().hex,
++                'trustee_user_id': uuid.uuid4().hex,
++                'impersonation': False,
++                'remaining_uses': None,
++            }
+         }
+         self.create_trust_validator.validate(request_to_validate)
+ 
+     def test_validate_trust_with_remaining_uses_succeeds(self):
+         """Validate trust request with `remaining_uses` succeeds."""
+         request_to_validate = {
+-            'trustor_user_id': uuid.uuid4().hex,
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'impersonation': False,
+-            'remaining_uses': 2,
++            'trust': {
++                'trustor_user_id': uuid.uuid4().hex,
++                'trustee_user_id': uuid.uuid4().hex,
++                'impersonation': False,
++                'remaining_uses': 2,
++            }
+         }
+         self.create_trust_validator.validate(request_to_validate)
+ 
+     def test_validate_trust_with_period_in_user_id_string(self):
+         """Validate trust request with a period in the user id string."""
+         request_to_validate = {
+-            'trustor_user_id': 'john.smith',
+-            'trustee_user_id': 'joe.developer',
+-            'impersonation': False,
++            'trust': {
++                'trustor_user_id': 'john.smith',
++                'trustee_user_id': 'joe.developer',
++                'impersonation': False,
++            }
+         }
+         self.create_trust_validator.validate(request_to_validate)
+ 
+     def test_validate_trust_with_invalid_expires_at_fails(self):
+         """Validate trust request with invalid `expires_at` fails."""
+         request_to_validate = {
+-            'trustor_user_id': uuid.uuid4().hex,
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'impersonation': False,
+-            'expires_at': 3,
++            'trust': {
++                'trustor_user_id': uuid.uuid4().hex,
++                'trustee_user_id': uuid.uuid4().hex,
++                'impersonation': False,
++                'expires_at': 3,
++            }
+         }
+         self.assertRaises(
+             exception.SchemaValidationError,
+@@ -2055,10 +2077,12 @@ class TrustValidationTestCase(unit.BaseTestCase):
+         """Validate trust request with `roles` succeeds."""
+         for role in self._valid_roles:
+             request_to_validate = {
+-                'trustor_user_id': uuid.uuid4().hex,
+-                'trustee_user_id': uuid.uuid4().hex,
+-                'impersonation': False,
+-                'roles': [role],
++                'trust': {
++                    'trustor_user_id': uuid.uuid4().hex,
++                    'trustee_user_id': uuid.uuid4().hex,
++                    'impersonation': False,
++                    'roles': [role],
++                }
+             }
+             self.create_trust_validator.validate(request_to_validate)
+ 
+@@ -2066,10 +2090,12 @@ class TrustValidationTestCase(unit.BaseTestCase):
+         """Validate trust request with invalid `roles` fails."""
+         for role in self._invalid_roles:
+             request_to_validate = {
+-                'trustor_user_id': uuid.uuid4().hex,
+-                'trustee_user_id': uuid.uuid4().hex,
+-                'impersonation': False,
+-                'roles': role,
++                'trust': {
++                    'trustor_user_id': uuid.uuid4().hex,
++                    'trustee_user_id': uuid.uuid4().hex,
++                    'impersonation': False,
++                    'roles': role,
++                }
+             }
+             self.assertRaises(
+                 exception.SchemaValidationError,
+@@ -2080,10 +2106,12 @@ class TrustValidationTestCase(unit.BaseTestCase):
+     def test_validate_trust_with_list_of_valid_roles_succeeds(self):
+         """Validate trust request with a list of valid `roles`."""
+         request_to_validate = {
+-            'trustor_user_id': uuid.uuid4().hex,
+-            'trustee_user_id': uuid.uuid4().hex,
+-            'impersonation': False,
+-            'roles': self._valid_roles,
++            'trust': {
++                'trustor_user_id': uuid.uuid4().hex,
++                'trustee_user_id': uuid.uuid4().hex,
++                'impersonation': False,
++                'roles': self._valid_roles,
++            }
+         }
+         self.create_trust_validator.validate(request_to_validate)
+ 
+diff --git a/keystone/trust/schema.py b/keystone/trust/schema.py
+index f9ad90766..509345fd5 100644
+--- a/keystone/trust/schema.py
++++ b/keystone/trust/schema.py
+@@ -10,20 +10,20 @@
+ # License for the specific language governing permissions and limitations
+ # under the License.
+ 
+-from keystone.common import validation
++from typing import Any
++
++from keystone.api.validation import response_types
+ from keystone.common.validation import parameter_types
+ 
+-_role_properties = {
+-    'type': 'array',
+-    'items': {
+-        'type': 'object',
+-        'properties': {
+-            'id': parameter_types.id_string,
+-            'name': parameter_types.name,
++_role_response_properties = {
++    "type": "array",
++    "items": {
++        "type": "object",
++        "properties": {
++            "id": parameter_types.id_string,
++            "name": parameter_types.name,
+         },
+-        'minProperties': 1,
+-        'maxProperties': 1,
+-        'additionalProperties': False,
++        "additionalProperties": False,
+     },
+ }
+ 
+@@ -31,20 +31,190 @@ _trust_properties = {
+     # NOTE(lbragstad): These are set as external_id_string because they have
+     # the ability to be read as LDAP user identifiers, which could be something
+     # other than uuid.
+-    'trustor_user_id': parameter_types.external_id_string,
+-    'trustee_user_id': parameter_types.external_id_string,
+-    'impersonation': parameter_types.boolean,
+-    'project_id': validation.nullable(parameter_types.id_string),
+-    'remaining_uses': {'type': ['integer', 'null'], 'minimum': 1},
+-    'expires_at': {'type': ['null', 'string']},
+-    'allow_redelegation': {'type': ['boolean', 'null']},
+-    'redelegation_count': {'type': ['integer', 'null'], 'minimum': 0},
+-    'roles': _role_properties,
+-}
+-
+-trust_create = {
+-    'type': 'object',
+-    'properties': _trust_properties,
+-    'required': ['trustor_user_id', 'trustee_user_id', 'impersonation'],
+-    'additionalProperties': True,
++    "trustor_user_id": {
++        "type": "string",
++        "description": (
++            "Represents the user who created the trust, and who's "
++            "authorization is being delegated."
++        ),
++    },
++    "trustee_user_id": {
++        "type": "string",
++        "description": "Represents the user who is capable of consuming "
++        "the trust.",
++    },
++    "impersonation": {
++        "type": "boolean",
++        "description": (
++            "If set to true, then the user attribute of tokens generated "
++            "based on the trust will represent that of the trustor rather "
++            "than the trustee, thus allowing the trustee to impersonate "
++            "the trustor. If impersonation if set to false, then the token's "
++            "user attribute will represent that of the trustee."
++        ),
++    },
++    "project_id": {
++        "type": ["string", "null"],
++        "format": "uuid",
++        "description": (
++            "Identifies the project upon which the trustor is "
++            "delegating authorization."
++        ),
++    },
++    "remaining_uses": {
++        "type": ["integer", "null"],
++        "minimum": 1,
++        "description": (
++            "Specifies how many times the trust can be used to obtain "
++            "a token. This value is decreased each time a token is issued "
++            "through the trust. Once it reaches 0, no further tokens will "
++            "be issued through the trust. The default value is null, "
++            "meaning there is no limit on the number of tokens issued "
++            "through the trust. If redelegation is enabled it must "
++            "not be set."
++        ),
++    },
++    "expires_at": {
++        "type": ["null", "string"],
++        "description": (
++            "Specifies the expiration time of the trust. A trust may "
++            "be revoked ahead of expiration. If the value represents "
++            "a time in the past, the trust is deactivated. In the "
++            "redelegation case it must not exceed the value of the "
++            "corresponding expires_at field of the redelegated trust "
++            "or it may be ommitted, then the expires_at value is copied "
++            "from the redelegated trust."
++        ),
++    },
++    "allow_redelegation": {
++        "type": ["boolean", "null"],
++        "description": (
++            "If set to true then a trust between a trustor and any "
++            "third-party user may be issued by the trustee just like a "
++            "regular trust. If set to false, stops further redelegation. "
++            "False by default."
++        ),
++    },
++    "redelegation_count": {
++        "type": ["integer", "null"],
++        "minimum": 0,
++        "description": (
++            "Specifies the maximum remaining depth of the redelegated "
++            "trust chain. Each subsequent trust has this field decremented "
++            "by 1 automatically. The initial trustor issuing new trust "
++            "that can be redelegated, must set allow_redelegation to true "
++            "and may set redelegation_count to an integer value less than "
++            "or equal to max_redelegation_count configuration parameter "
++            "in order to limit the possible length of derivated trust chains. "
++            "The trust issued by the trustor using a project-scoped token "
++            "(not redelegating), in which allow_redelegation is set to true "
++            "(the new trust is redelegatable), will be populated with the "
++            "value specified in the max_redelegation_count configuration "
++            "parameter if redelegation_count is not set or set to null. If "
++            "allow_redelegation is set to false then redelegation_count "
++            "will be set to 0 in the trust. If the trust is being issued by "
++            "the trustee of a redelegatable trust-scoped token (redelegation "
++            "case) then redelegation_count should not be set, as it will "
++            "automatically be set to the value in the redelegatable "
++            "trust-scoped token decremented by 1. Note, if the resulting "
++            "value is 0, this means that the new trust will not be "
++            "redelegatable, regardless of the value of allow_redelegation."
++        ),
++    },
++}
++
++trust_schema: dict[str, Any] = {
++    "type": "object",
++    "description": "A trust object.",
++    "properties": {
++        "id": {
++            "type": "string",
++            "readOnly": True,
++            "description": "The ID of the trust.",
++        },
++        "links": response_types.resource_links,
++        **_trust_properties,
++        **_role_response_properties,
++    },
++    "additionalProperties": True,
++}
++
++trust_index_request_query: dict[str, Any] = {
++    "type": "object",
++    "properties": {
++        "trustor_user_id": {
++            "type": "string",
++            "description": (
++                "Represents the user who created the trust, and who's "
++                "authorization is being delegated."
++            ),
++        },
++        "trustee_user_id": {
++            "type": "string",
++            "description": "Represents the user who is capable of consuming "
++            "the trust.",
++        },
++    },
++    "additionalProperties": False,
++}
++
++trust_index_response_body: dict[str, Any] = {
++    "type": "object",
++    "properties": {
++        "trusts": {
++            "type": "array",
++            "items": trust_schema,
++            "description": "A list of trust objects.",
++        },
++        "links": response_types.links,
++        "truncated": response_types.truncated,
++    },
++    "additionalProperties": False,
++}
++
++trust_request_query: dict[str, Any] = {
++    "type": "object",
++    "properties": {},
++    "additionalProperties": False,
++}
++
++trust_response_body: dict[str, Any] = {
++    "type": "object",
++    "description": "A trust object",
++    "properties": {"trust": trust_schema},
++    "additionalProperties": False,
++}
++
++trust_create_request_body: dict[str, Any] = {
++    "type": "object",
++    "description": "A trust object",
++    "properties": {
++        "trust": {
++            "type": "object",
++            "properties": {
++                **_trust_properties,
++                "roles": {
++                    "type": "array",
++                    "items": {
++                        "type": "object",
++                        "properties": {
++                            "id": parameter_types.id_string,
++                            "name": parameter_types.name,
++                        },
++                        "minProperties": 1,
++                        "maxProperties": 1,
++                        "additionalProperties": False,
++                    },
++                },
++            },
++            "required": [
++                "trustor_user_id",
++                "trustee_user_id",
++                "impersonation",
++            ],
++            "additionalProperties": True,
++        }
++    },
++    "additionalProperties": False,
++    "required": ["trust"],
+ }
+-- 
+2.53.0
+
